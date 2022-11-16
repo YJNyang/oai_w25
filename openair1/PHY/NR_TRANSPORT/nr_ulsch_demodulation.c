@@ -1897,7 +1897,6 @@ int nr_rx_pusch(PHY_VARS_gNB *gNB,
                 uint8_t slot,
                 unsigned char harq_pid)
 {
-
   uint8_t aarx, aatx;
   uint32_t nb_re_pusch, bwp_start_subcarrier;
   int avgs = 0;
@@ -1931,7 +1930,7 @@ int nr_rx_pusch(PHY_VARS_gNB *gNB,
       for (int nl=0; nl<rel15_ul->nrOfLayers; nl++) {
         
         nr_pusch_channel_estimation(gNB,
-                                    slot,
+                                    slot,  
                                     get_dmrs_port(nl,rel15_ul->dmrs_ports),
                                     symbol,
                                     ulsch_id,

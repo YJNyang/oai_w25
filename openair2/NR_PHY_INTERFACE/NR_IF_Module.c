@@ -316,7 +316,7 @@ static void match_crc_rx_pdu(nfapi_nr_rx_data_indication_t *rx_ind, nfapi_nr_crc
     crc_ind_unmatched->crc_list = calloc(crc_ind_unmatched->number_crcs, sizeof(nfapi_nr_crc_t));
     for (int i = 0; i < crc_ind->number_crcs; i++) {
       if (!rx_ind_has_rnti(rx_ind, crc_ind->crc_list[i].rnti)) {
-          LOG_I(NR_MAC, "crc_ind->crc_list[%d].rnti %x does not match any rx_ind pdu rnti\n",
+          LOG_D(NR_MAC, "crc_ind->crc_list[%d].rnti %x does not match any rx_ind pdu rnti\n",
                 i, crc_ind->crc_list[i].rnti);
           crc_ind_unmatched->crc_list[num_unmatched_crcs] = crc_ind->crc_list[i];
           num_unmatched_crcs++;
@@ -345,7 +345,7 @@ static void match_crc_rx_pdu(nfapi_nr_rx_data_indication_t *rx_ind, nfapi_nr_crc
     rx_ind_unmatched->pdu_list = calloc(rx_ind_unmatched->number_of_pdus, sizeof(nfapi_nr_pdu_t));
     for (int i = 0; i < rx_ind->number_of_pdus; i++) {
       if (!crc_ind_has_rnti(crc_ind, rx_ind->pdu_list[i].rnti)) {
-        LOG_I(NR_MAC, "rx_ind->pdu_list[%d].rnti %d does not match any crc_ind pdu rnti\n",
+        LOG_D(NR_MAC, "rx_ind->pdu_list[%d].rnti %d does not match any crc_ind pdu rnti\n",
               i, rx_ind->pdu_list[i].rnti);
         rx_ind_unmatched->pdu_list[num_unmatched_rxs] = rx_ind->pdu_list[i];
         num_unmatched_rxs++;
@@ -371,7 +371,7 @@ static void match_crc_rx_pdu(nfapi_nr_rx_data_indication_t *rx_ind, nfapi_nr_crc
 }
 
 void NR_UL_indication(NR_UL_IND_t *UL_info) {
-  AssertFatal(UL_info!=NULL,"UL_info is null\n");
+  AssertFatal(UL_info!=NULL,"UL_info is null\n"); 
   module_id_t      module_id   = UL_info->module_id;
   int              CC_id       = UL_info->CC_id;
   NR_Sched_Rsp_t   *sched_info = &NR_Sched_INFO[module_id][CC_id];

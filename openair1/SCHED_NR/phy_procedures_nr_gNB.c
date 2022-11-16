@@ -479,6 +479,7 @@ void nr_fill_indication(PHY_VARS_gNB *gNB, int frame, int slot_rx, int ULSCH_id,
   gNB->crc_pdu_list[num_crc].num_cb = pusch_pdu->pusch_data.num_cb;
   gNB->crc_pdu_list[num_crc].ul_cqi = cqi;
   gNB->crc_pdu_list[num_crc].timing_advance = timing_advance_update;
+  LOG_D(PHY, "[yjn]:%d.%d:  gNB->crc_pdu_list[num_crc].harq_id = %d\n",frame,slot_rx,harq_pid); //debug_yjn
   // in terms of dBFS range -128 to 0 with 0.1 step
   gNB->crc_pdu_list[num_crc].rssi = (dtx_flag==0) ? 1280 - (10*dB_fixed(32767*32767)-dB_fixed_times10(gNB->pusch_vars[ULSCH_id]->ulsch_power[0])) : 0;
 
@@ -627,7 +628,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx) {
   int pusch_decode_done = 0;
 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_gNB_UESPEC_RX,1);
-  LOG_D(PHY,"phy_procedures_gNB_uespec_RX frame %d, slot %d\n",frame_rx,slot_rx);
+  LOG_D(PHY,"phy_procedures_gNB_uespec_RX frame %d, slot %d\n",frame_rx,slot_rx); //debug_yjn
 
   fill_ul_rb_mask(gNB, frame_rx, slot_rx);
 
@@ -673,7 +674,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx) {
 
           offset = pucch_pdu->start_symbol_index*gNB->frame_parms.ofdm_symbol_size + (gNB->frame_parms.first_carrier_offset+pucch_pdu->prb_start*12);
           power_rxF = signal_energy_nodc(&gNB->common_vars.rxdataF[0][offset],12);
-          LOG_D(PHY,"frame %d, slot %d: PUCCH signal energy %d\n",frame_rx,slot_rx,power_rxF);
+          LOG_D(PHY,"frame %d, slot %d: PUCCH signal energy %d\n",frame_rx,slot_rx,power_rxF); //add_yjn
 
           nr_decode_pucch0(gNB,
                            frame_rx,
@@ -726,8 +727,8 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx) {
             (ulsch_harq->slot == slot_rx) &&
             (ulsch_harq->handled == 0)){
 
-          LOG_D(PHY, "PUSCH detection started in frame %d slot %d\n",
-                frame_rx,slot_rx);
+          LOG_D(PHY, "PUSCH detection started in frame %d slot %d harq_pid %d \n",
+                frame_rx,slot_rx,harq_pid);
           int num_dmrs=0;
           for (int s=0;s<NR_NUMBER_OF_SYMBOLS_PER_SLOT; s++)
              num_dmrs+=(ulsch_harq->ulsch_pdu.ul_dmrs_symb_pos>>s)&1;
@@ -762,7 +763,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx) {
 	        start_meas(&gNB->rx_pusch_stats);
           no_sig = nr_rx_pusch(gNB, ULSCH_id, frame_rx, slot_rx, harq_pid);
           if (no_sig) {
-            LOG_D(PHY, "PUSCH not detected in frame %d, slot %d\n", frame_rx, slot_rx);
+            LOG_I(PHY, "PUSCH not detected in frame %d, slot %d,harq_pid%d\n", frame_rx, slot_rx,harq_pid);
             nr_fill_indication(gNB, frame_rx, slot_rx, ULSCH_id, harq_pid, 1,1);
             return 1;
           }

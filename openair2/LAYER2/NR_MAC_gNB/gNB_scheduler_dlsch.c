@@ -52,7 +52,7 @@
 #define HALFWORD 16
 #define WORD 32
 //#define SIZE_OF_POINTER sizeof (void *)
-
+extern int num_delay;//add_yjn_sec
 const int get_dl_tda(const gNB_MAC_INST *nrmac, const NR_ServingCellConfigCommon_t *scc, int slot) {
 
   const NR_TDD_UL_DL_Pattern_t *tdd = scc->tdd_UL_DL_ConfigurationCommon ? &scc->tdd_UL_DL_ConfigurationCommon->pattern1 : NULL;
@@ -975,8 +975,8 @@ void nr_schedule_ue_spec(module_id_t module_id,
     DevAssert(!harq->is_waiting);
     add_tail_nr_list(&sched_ctrl->feedback_dl_harq, current_harq_pid);
     NR_sched_pucch_t *pucch = &sched_ctrl->sched_pucch[sched_pdsch->pucch_allocation];
-    harq->feedback_frame = pucch->frame;
-    harq->feedback_slot = pucch->ul_slot;
+    harq->feedback_frame = (pucch->ul_slot + num_delay) >=20?  (pucch->frame + 1)%1024 : pucch->frame;//add_yjn_test
+    harq->feedback_slot = (pucch->ul_slot + num_delay)%20;//add_yjn_test
     harq->is_waiting = true;
     UE->mac_stats.dl.rounds[harq->round]++;
     LOG_D(NR_MAC,

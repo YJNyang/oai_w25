@@ -87,7 +87,7 @@
     {"offset",                 "<channel offset in samps>\n",         simOpt,  iptr:&(rfsimulator->chan_offset),       defintval:0,                     TYPE_INT,       0 }\
   };
 
-
+#define NUM_DELAY  5.5 
 
 static int rfsimu_setchanmod_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 static telnetshell_cmddef_t rfsimu_cmdarray[] = {
@@ -592,7 +592,8 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, int nsamps_for_initi
           LOG_E(HW,"UEsock: %d Tx/Rx shift too large Tx:%lu, Rx:%lu\n", fd, t->lastWroteTS, b->lastReceivedTS);
 
         pthread_mutex_unlock(&Sockmutex);
-        b->transferPtr=(char *)&b->circularBuf[(b->lastReceivedTS*b->th.nbAnt)%CirSize];
+        // b->transferPtr=(char *)&b->circularBuf[(b->lastReceivedTS*b->th.nbAnt)%CirSize];
+        b->transferPtr=(char *)&b->circularBuf[((b->lastReceivedTS+(int)(NUM_DELAY*30720))*b->th.nbAnt)%CirSize];  //add_yjn
         b->remainToTransfer=sampleToByte(b->th.size, b->th.nbAnt);
       }
 

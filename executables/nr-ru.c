@@ -99,7 +99,6 @@ int attach_rru(RU_t *ru);
 int connect_rau(RU_t *ru);
 static void NRRCconfig_RU(void);
 
-
 extern int emulate_rf;
 extern int numerology;
 

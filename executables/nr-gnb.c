@@ -224,6 +224,7 @@ void rx_func(void *param) {
                            gNB->frame_parms.Ncp==EXTENDED?12:14,
                            gNB->frame_parms.ofdm_symbol_size);
     }
+    LOG_D(PHY,"[yjn]RX FIRST:frame_rx = %d,slot_rx = %d\n",frame_rx,slot_rx); //debug_yjn
     phy_procedures_gNB_uespec_RX(gNB, frame_rx, slot_rx);
   }
 
