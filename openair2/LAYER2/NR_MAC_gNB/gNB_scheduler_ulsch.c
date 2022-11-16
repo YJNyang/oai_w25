@@ -36,6 +36,9 @@
 #include <openair2/UTIL/OPT/opt.h>
 
 #include "LAYER2/NR_MAC_COMMON/nr_mac_extern.h"
+//extern uint16_t sl_ahead;
+extern int num_delay;//add_yjn
+int get_future_ul_tti_req_ind(frame_t frame, sub_frame_t slot);//add_yjn
 extern void process_CellGroup(NR_CellGroupConfig_t *CellGroup, NR_UE_sched_ctrl_t *sched_ctrl);
 
 int get_dci_format(NR_UE_sched_ctrl_t *sched_ctrl) {
@@ -502,7 +505,9 @@ void nr_rx_sdu(const module_id_t gnb_mod_idP,
                const uint16_t rssi){
 
   gNB_MAC_INST *gNB_mac = RC.nrmac[gnb_mod_idP];
-
+  NR_COMMON_channels_t *cc = gNB_mac->common_channels;  //add_yjn
+  NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon; //add_yjn
+  const int mu = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing; //add_yjn
   const int current_rnti = rntiP;
   LOG_D(NR_MAC, "rx_sdu for rnti %04x\n", current_rnti);
   const int target_snrx10 = gNB_mac->pusch_target_snrx10;
@@ -697,7 +702,8 @@ void nr_rx_sdu(const module_id_t gnb_mod_idP,
 
           if (nr_process_mac_pdu(gnb_mod_idP, UE, CC_idP, frameP, slotP, sduP, sdu_lenP) == 0) {
             ra->state = Msg4;
-            ra->Msg4_frame = (frameP + 2) % 1024;
+            ra->Msg4_frame = (frameP + 2) % 1024; 
+            //ra->Msg4_frame = (frameP + (gNB_mac->if_inst->sl_ahead + num_delay)/nr_slots_per_frame[mu] + 1) % 1024; //add_yjn   ra->Msg4_frame = (frameP + 2) % 1024;
             ra->Msg4_slot = 1;
             
             if (ra->msg3_dcch_dtch) {
@@ -1361,6 +1367,8 @@ bool nr_fr1_ulsch_preprocessor(module_id_t module_id, frame_t frame, sub_frame_t
   NR_UE_sched_ctrl_t *sched_ctrl = &nr_mac->UE_info.list[0]->UE_sched_ctrl;
   const int temp_tda = get_ul_tda(nr_mac, scc, slot);
   int K2 = get_K2(scc, scc_sib1, sched_ctrl->active_ubwp, temp_tda, mu);
+  // const int sched_frame = (frame + (slot + K2 + num_delay) / nr_slots_per_frame[mu]) % 1024;  //add_yjn   const int sched_frame = frame + (slot + K2 >= nr_slots_per_frame[mu]);
+  // const int sched_slot = (slot + K2 + num_delay) % nr_slots_per_frame[mu];//add_yjn   const int sched_slot = (slot + K2) % nr_slots_per_frame[mu];
   const int sched_frame = (frame + (slot + K2 >= nr_slots_per_frame[mu])) & 1023;
   const int sched_slot = (slot + K2) % nr_slots_per_frame[mu];
   const int tda = get_ul_tda(nr_mac, scc, sched_slot);
@@ -1405,8 +1413,11 @@ bool nr_fr1_ulsch_preprocessor(module_id_t module_id, frame_t frame, sub_frame_t
   /* Change vrb_map_UL to rballoc_mask: check which symbols per RB (in
    * vrb_map_UL) overlap with the "default" tda and exclude those RBs.
    * Calculate largest contiguous RBs */
+  int future_ind = get_future_ul_tti_req_ind(sched_frame, sched_slot);//add_yjn
   uint16_t *vrb_map_UL =
-      &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
+      &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[future_ind * MAX_BWP_SIZE];//add_yjn   &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
+  // uint16_t *vrb_map_UL =
+  //     &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
 
   NR_BWP_t *genericParameters = get_ul_bwp_genericParameters(sched_ctrl->active_ubwp,
                                                              scc,
@@ -1628,7 +1639,10 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
           sched_ctrl->tpc0);
 
     /* PUSCH in a later slot, but corresponding DCI now! */
-    nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][sched_pusch->slot];
+    sched_pusch->frame = (sched_pusch->frame + 1)%1024; //add_yjn
+    int future_index = get_future_ul_tti_req_ind(sched_pusch->frame, sched_pusch->slot);//add_yjn
+    nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][future_index]; //add_yjn   nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][sched_pusch->slot];
+    // nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][sched_pusch->slot];
     AssertFatal(future_ul_tti_req->SFN == sched_pusch->frame
                 && future_ul_tti_req->Slot == sched_pusch->slot,
                 "%d.%d future UL_tti_req's frame.slot %d.%d does not match PUSCH %d.%d\n",

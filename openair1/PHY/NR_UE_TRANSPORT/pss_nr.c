@@ -50,19 +50,46 @@
 
 //#define DBG_PSS_NR
 
-/*******************************************************************
-*
-* NAME :         generate_pss_nr
-*
-* PARAMETERS :   N_ID_2 : element 2 of physical layer cell identity
-*                value : { 0, 1, 2}
-*
-* RETURN :       generate binary pss sequence (this is a m-sequence)
-*
-* DESCRIPTION :  3GPP TS 38.211 7.4.2.2 Primary synchronisation signal
-*                Sequence generation
-*
-*********************************************************************/
+//add_yjn
+void pre_cfo_compensation_simd(int32_t* rxdata, int32_t* output,int start, int end, double off_angle) {
+    int nb_samples_within_simd = 8;
+    float phase_re = (float)cos(nb_samples_within_simd * off_angle);
+    float phase_im = (float)sin(nb_samples_within_simd * off_angle);
+    __m256 base_phase_re = _mm256_set1_ps(phase_re);
+    __m256 base_phase_im = _mm256_set1_ps(phase_im);
+    __m256 real_phase_re = _mm256_setr_ps(cos(start * off_angle), cos((start + 1) * off_angle), cos((start + 2) * off_angle), cos((start + 3) * off_angle),
+        cos((start + 4) * off_angle), cos((start + 5) * off_angle), cos((start + 6) * off_angle), cos((start + 7) * off_angle));
+    __m256 real_phase_im = _mm256_setr_ps(sin(start * off_angle), sin((start + 1) * off_angle), sin((start + 2) * off_angle), sin((start + 3) * off_angle),
+        sin((start + 4) * off_angle), sin((start + 5) * off_angle), sin((start + 6) * off_angle), sin((start + 7) * off_angle));
+
+    __m256 real_phase_re_tem;
+    __m256 real_phase_im_tem;
+    for (int n = start; n < end; n += 8) {
+
+        __m256 rx_re = _mm256_setr_ps((float)((short*)rxdata)[2 * n], (float)(((short*)rxdata))[2 * n + 2],
+                                              (float)(((short*)rxdata))[2 * n + 4], (float)(((short*)rxdata))[2 * n + 6],
+                                              (float)(((short*)rxdata))[2 * n + 8], (float)(((short*)rxdata))[2 * n + 10],
+                                              (float)(((short*)rxdata))[2 * n + 12], (float)(((short*)rxdata))[2 * n + 14]);
+        __m256 rx_im = _mm256_setr_ps((float)(((short*)rxdata))[2 * n + 1], (float)(((short*)rxdata))[2 * n + 3],
+                                              (float)(((short*)rxdata))[2 * n + 5], (float)(((short*)rxdata))[2 * n + 7],
+                                              (float)(((short*)rxdata))[2 * n + 9], (float)(((short*)rxdata))[2 * n + 11],
+                                              (float)(((short*)rxdata))[2 * n + 13], (float)(((short*)rxdata))[2 * n + 15]);
+
+        __m256 data_re = _mm256_fmsub_ps(rx_re, real_phase_re, _mm256_mul_ps(rx_im, real_phase_im)); 
+        __m256 data_im = _mm256_fmadd_ps(rx_im, real_phase_re, _mm256_mul_ps(rx_re, real_phase_im)); 
+
+        __m256i data_re_int = _mm256_cvtps_epi32(data_re);
+        __m256i data_im_int = _mm256_cvtps_epi32(data_im);
+        __m256i data = _mm256_blend_epi16(data_re_int, _mm256_slli_epi32(data_im_int, 16), 0b10101010);
+        _mm256_store_si256((__m256i*)(output+start) + (n - start) / 8, data);
+
+        real_phase_re_tem = real_phase_re;
+        real_phase_im_tem = real_phase_im;
+        real_phase_re = _mm256_fmsub_ps(real_phase_re_tem, base_phase_re, _mm256_mul_ps(real_phase_im_tem, base_phase_im));
+        real_phase_im = _mm256_fmadd_ps(real_phase_im_tem, base_phase_re, _mm256_mul_ps(real_phase_re_tem, base_phase_im));
+
+    }
+}
 
 void generate_pss_nr(NR_DL_FRAME_PARMS *fp,int N_ID_2)
 {

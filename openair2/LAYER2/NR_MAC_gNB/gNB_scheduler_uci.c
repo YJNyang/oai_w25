@@ -36,24 +36,26 @@
 #include "nfapi/oai_integration/vendor_ext.h"
 
 extern RAN_CONTEXT_t RC;
+extern int num_delay;  //add_yjn
 
-
-
+int get_future_ul_tti_req_ind(frame_t frame, sub_frame_t slot);//add_yjn
 static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac,
                                 frame_t frame,
                                 sub_frame_t slot,
                                 const NR_sched_pucch_t *pucch,
                                 NR_UE_info_t* UE)
 {
+   frame_t pucch_frame = (pucch->frame + 1)%1024; //add_yjn_test
+  int future_index = get_future_ul_tti_req_ind(pucch_frame, pucch->ul_slot);//add_yjn
   nfapi_nr_ul_tti_request_t *future_ul_tti_req =
-      &nrmac->UL_tti_req_ahead[0][pucch->ul_slot];
-  AssertFatal(future_ul_tti_req->SFN == pucch->frame
+      &nrmac->UL_tti_req_ahead[0][future_index];//add_yjn
+ AssertFatal(future_ul_tti_req->SFN == pucch_frame  //add_yjn_test
               && future_ul_tti_req->Slot == pucch->ul_slot,
               "Current %4d.%2d : future UL_tti_req's frame.slot %4d.%2d does not match PUCCH %4d.%2d\n",
               frame,slot,
               future_ul_tti_req->SFN,
               future_ul_tti_req->Slot,
-              pucch->frame,
+              pucch_frame,  //add_yjn_test
               pucch->ul_slot);
   // n_pdus is number of pdus, so, in the array, it is the index of the next free element
   if (future_ul_tti_req->n_pdus >= sizeofArray(future_ul_tti_req->pdus_list) ) {
@@ -72,7 +74,7 @@ static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac,
         pucch->dai_c>0 ? "pucch_acknak" : "",
         frame,
         slot,
-        pucch->frame,
+        pucch_frame,  //add_yjn_test
         pucch->ul_slot,
         pucch->sr_flag,
         pucch->dai_c,
@@ -770,7 +772,10 @@ void nr_csi_meas_reporting(int Mod_idP,
       int bwp_start = NRRIV2PRBOFFSET(genericParameters->locationAndBandwidth,MAX_BWP_SIZE);
 
       // going through the list of PUCCH resources to find the one indexed by resource_id
-      uint16_t *vrb_map_UL = &RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
+      // uint16_t *vrb_map_UL = &RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
+       // going through the list of PUCCH resources to find the one indexed by resource_id
+      int future_ind = get_future_ul_tti_req_ind(frame, sched_slot);  //add_yjn
+      uint16_t *vrb_map_UL = &RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL[future_ind * MAX_BWP_SIZE];//add_yjn
       const int m = pucch_Config->resourceToAddModList->list.count;
       for (int j = 0; j < m; j++) {
         NR_PUCCH_Resource_t *pucchres = pucch_Config->resourceToAddModList->list.array[j];
@@ -1415,7 +1420,7 @@ static NR_UE_harq_t *find_harq(frame_t frame, sub_frame_t slot, NR_UE_info_t * U
     return NULL;
   NR_UE_harq_t *harq = &sched_ctrl->harq_processes[pid];
   /* old feedbacks we missed: mark for retransmission */
-  while (harq->feedback_frame != frame
+  while ((harq->feedback_frame)%1024 != frame   //add_yjn
          || (harq->feedback_frame == frame && harq->feedback_slot < slot)) {
     LOG_W(NR_MAC,
           "expected HARQ pid %d feedback at %4d.%2d, but is at %4d.%2d instead (HARQ feedback is in the past)\n",
@@ -1787,7 +1792,8 @@ int nr_acknack_scheduling(int mod_id,
   uint16_t *vrb_map_UL;
   while ((n_slots_frame + pucch->ul_slot - slot) % n_slots_frame <= max_fb_time) {
     // checking if in ul_slot the resources potentially to be assigned to this PUCCH are available
-    vrb_map_UL = &RC.nrmac[mod_id]->common_channels[CC_id].vrb_map_UL[pucch->ul_slot * MAX_BWP_SIZE];
+    int future_ind = get_future_ul_tti_req_ind(pucch->frame, pucch->ul_slot);//add_yjn
+    vrb_map_UL = &RC.nrmac[mod_id]->common_channels[CC_id].vrb_map_UL[future_ind * MAX_BWP_SIZE];//add_yjn
     bool ret = test_acknack_vrb_occupation(sched_ctrl,
                                            pucch,
                                            vrb_map_UL,
@@ -1880,9 +1886,11 @@ int nr_acknack_scheduling(int mod_id,
   pucch->resource_indicator = 0; // each UE has dedicated PUCCH resources
   pucch->r_pucch=r_pucch;
 
-  vrb_map_UL = &RC.nrmac[mod_id]->common_channels[CC_id].vrb_map_UL[pucch->ul_slot * MAX_BWP_SIZE];
+  int future_ind = get_future_ul_tti_req_ind(pucch->frame, pucch->ul_slot);//add_yjn
+  vrb_map_UL = &RC.nrmac[mod_id]->common_channels[CC_id].vrb_map_UL[future_ind * MAX_BWP_SIZE];//add_yjn
+  // vrb_map_UL = &RC.nrmac[mod_id]->common_channels[CC_id].vrb_map_UL[pucch->ul_slot * MAX_BWP_SIZE];
   for (int l=0; l<pucch->nr_of_symb; l++) {
-    uint16_t symb = SL_to_bitmap(pucch->start_symb+l, 1);
+    uint16_t symb = SL_to_bitmap(pucch->start_symb+l, 1);   //add_yjn
     int prb;
     if (l==1 && pucch->second_hop_prb != 0)
       prb = pucch->second_hop_prb;
@@ -1952,7 +1960,9 @@ void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t SFN, sub_frame_t slot)
       NR_PUCCH_Resource_t *pucch_res = pucch_Config->resourceToAddModList->list.array[found];
       /* for the moment, can only handle SR on PUCCH Format 0 */
       DevAssert(pucch_res->format.present == NR_PUCCH_Resource__format_PR_format0);
-      nfapi_nr_ul_tti_request_t *ul_tti_req = &nrmac->UL_tti_req_ahead[0][slot];
+      int future_index = get_future_ul_tti_req_ind(SFN + 1, slot); //add_yjn
+      nfapi_nr_ul_tti_request_t *ul_tti_req = &nrmac->UL_tti_req_ahead[0][future_index];//add_yjn
+      // nfapi_nr_ul_tti_request_t *ul_tti_req = &nrmac->UL_tti_req_ahead[0][slot];
       bool nfapi_allocated = false;
       for (int i = 0; i < ul_tti_req->n_pdus; ++i) {
         if (ul_tti_req->pdus_list[i].pdu_type != NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE)

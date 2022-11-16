@@ -3075,6 +3075,7 @@ void schedule_nr_bwp_switch(module_id_t module_id,
   }
 }
 
+
 void UL_tti_req_ahead_initialization(gNB_MAC_INST * gNB, NR_ServingCellConfigCommon_t *scc, int n, int CCid) {
 
   if(gNB->UL_tti_req_ahead[CCid]) return;
@@ -3088,6 +3089,6 @@ void UL_tti_req_ahead_initialization(gNB_MAC_INST * gNB, NR_ServingCellConfigCom
   for (int i = 0; i < n; ++i) {
     nfapi_nr_ul_tti_request_t *req = &gNB->UL_tti_req_ahead[CCid][i];
     req->SFN = i < (gNB->if_inst->sl_ahead-1);
-    req->Slot = i;
+    req->Slot = i % nr_slots_per_frame[*scc->ssbSubcarrierSpacing]; //add_yjn
   }
 }

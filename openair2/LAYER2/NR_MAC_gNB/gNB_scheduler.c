@@ -58,22 +58,60 @@
 
 const uint8_t nr_rv_round_map[4] = { 0, 2, 3, 1 };
 uint16_t nr_pdcch_order_table[6] = { 31, 31, 511, 2047, 2047, 8191 };
-
+extern int num_delay;//add_yjn
 uint8_t vnf_first_sched_entry = 1;
+
+/* 
+  name: get_last_ul_tti_req_ind
+  input: current scheduler frame,slot
+  function: used to get last ul_tti_req index
+*/
+//yjn两帧为一组（偶数帧，奇数帧）共40个时隙；该函数实现当前时隙的上一时隙（转化成组内时隙号后的）；
+//若为偶数帧0时隙，则返回上一组的第39时隙；若为偶数帧，则返回上一时隙；若为奇数帧，则返回当前组的上一时隙；
+int get_last_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slot)       //add_yjn
+{
+  NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
+  const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing] + num_delay;     //  if 30khz, 40个时隙
+  
+  int index = 0;
+  if (frame % 2 == 0 && slot == 0)
+    index = num_slots - 1;  
+  else if (frame % 2 == 0) 
+    index = slot - 1;
+  else if (frame % 2)
+    index = slot + num_delay - 1;
+  LOG_D(MAC,"drop_ul_tti index = %d \n", index);
+  return index;
+}
+
+/* 
+  name: get_future_ul_tti_req_ind
+  input: current scheduler frame,slot
+  function: used to get future ul_tti_req index
+*/
+//函数返回当前时隙的组内时隙号
+int get_future_ul_tti_req_ind(frame_t frame, sub_frame_t slot)//add_yjn
+{
+  int index = frame % 2 ? slot + num_delay : slot;
+  LOG_D(MAC,"drop_ul_tti index = %d \n", index);
+  return index;  
+}
 
 void clear_nr_nfapi_information(gNB_MAC_INST * gNB,
                                 int CC_idP,
                                 frame_t frameP,
-                                sub_frame_t slotP){
+                                sub_frame_t slotP){  //调度的时隙为当前时隙加6个时隙，后续称为调度时隙
+  //add_yjn
   NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
-  const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
-
+  const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing] + num_delay;
+  LOG_D(NR_MAC,"[yjn] clear_nr_nfapi_information && UL_tti_req_ahead_initialization\n");
   UL_tti_req_ahead_initialization(gNB, scc, num_slots, CC_idP);
 
   nfapi_nr_dl_tti_request_t    *DL_req = &gNB->DL_req[0];
   nfapi_nr_dl_tti_pdcch_pdu_rel15_t **pdcch = (nfapi_nr_dl_tti_pdcch_pdu_rel15_t **)gNB->pdcch_pdu_idx[CC_idP];
+  int last_ind = get_last_ul_tti_req_ind(gNB, frameP, slotP);//add_yjn
   nfapi_nr_ul_tti_request_t    *future_ul_tti_req =
-      &gNB->UL_tti_req_ahead[CC_idP][(slotP + num_slots - 1) % num_slots];
+      &gNB->UL_tti_req_ahead[CC_idP][last_ind];           //add_yjn   //当前组内时隙的上一时隙的future_ul_tti_req的pdu被清空
   nfapi_nr_ul_dci_request_t    *UL_dci_req = &gNB->UL_dci_req[0];
   nfapi_nr_tx_data_request_t   *TX_req = &gNB->TX_req[0];
 
@@ -91,21 +129,71 @@ void clear_nr_nfapi_information(gNB_MAC_INST * gNB,
   UL_dci_req[CC_idP].numPdus                     = 0;
 
   /* advance last round's future UL_tti_req to be ahead of current frame/slot */
-  future_ul_tti_req->SFN = (slotP == 0 ? frameP : frameP + 1) % 1024;
+  future_ul_tti_req->SFN = (slotP == 0 ? frameP + 1: frameP + 2) % 1024;  //add_yjn  //上一时隙
   LOG_D(NR_MAC, "In %s: UL_tti_req_ahead SFN.slot = %d.%d for slot %d \n", __FUNCTION__, future_ul_tti_req->SFN, future_ul_tti_req->Slot, (slotP + num_slots - 1) % num_slots);
   /* future_ul_tti_req->Slot is fixed! */
   future_ul_tti_req->n_pdus = 0;
   future_ul_tti_req->n_ulsch = 0;
   future_ul_tti_req->n_ulcch = 0;
   future_ul_tti_req->n_group = 0;
-
   /* UL_tti_req is a simple pointer into the current UL_tti_req_ahead, i.e.,
-   * it walks over UL_tti_req_ahead in a circular fashion */
-  gNB->UL_tti_req[CC_idP] = &gNB->UL_tti_req_ahead[CC_idP][slotP];
+   * it walks over UL_tti_req_ahead in a circular fashion */  //gNB->UL_tti_req[CC_idP] = &gNB->UL_tti_req_ahead[CC_idP][slotP]; //add_yjn
+   
+  /*
+  *  Since the ul_tti_req_ahead array is now extended from 20 to 40, 
+  *  but the slot is always looped 0-20, special processing is done here
+  */
+  int future_ind = get_future_ul_tti_req_ind(frameP, slotP);  //add_yjn
+  gNB->UL_tti_req[CC_idP] = &gNB->UL_tti_req_ahead[CC_idP][future_ind];  //add_yjn
 
   TX_req[CC_idP].Number_of_PDUs                  = 0;
-
 }
+
+// void clear_nr_nfapi_information(gNB_MAC_INST * gNB,
+//                                 int CC_idP,
+//                                 frame_t frameP,
+//                                 sub_frame_t slotP){
+//   NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
+//   const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
+
+//   UL_tti_req_ahead_initialization(gNB, scc, num_slots, CC_idP);
+
+//   nfapi_nr_dl_tti_request_t    *DL_req = &gNB->DL_req[0];
+//   nfapi_nr_dl_tti_pdcch_pdu_rel15_t **pdcch = (nfapi_nr_dl_tti_pdcch_pdu_rel15_t **)gNB->pdcch_pdu_idx[CC_idP];
+//   nfapi_nr_ul_tti_request_t    *future_ul_tti_req =
+//       &gNB->UL_tti_req_ahead[CC_idP][(slotP + num_slots - 1) % num_slots];
+//   nfapi_nr_ul_dci_request_t    *UL_dci_req = &gNB->UL_dci_req[0];
+//   nfapi_nr_tx_data_request_t   *TX_req = &gNB->TX_req[0];
+
+//   gNB->pdu_index[CC_idP] = 0;
+
+//   DL_req[CC_idP].SFN                                   = frameP;
+//   DL_req[CC_idP].Slot                                  = slotP;
+//   DL_req[CC_idP].dl_tti_request_body.nPDUs             = 0;
+//   DL_req[CC_idP].dl_tti_request_body.nGroup            = 0;
+//   //DL_req[CC_idP].dl_tti_request_body.transmission_power_pcfich           = 6000;
+//   memset(pdcch, 0, sizeof(*pdcch) * MAX_NUM_CORESET);
+
+//   UL_dci_req[CC_idP].SFN                         = frameP;
+//   UL_dci_req[CC_idP].Slot                        = slotP;
+//   UL_dci_req[CC_idP].numPdus                     = 0;
+
+//   /* advance last round's future UL_tti_req to be ahead of current frame/slot */
+//   future_ul_tti_req->SFN = (slotP == 0 ? frameP : frameP + 1) % 1024;
+//   LOG_D(NR_MAC, "In %s: UL_tti_req_ahead SFN.slot = %d.%d for slot %d \n", __FUNCTION__, future_ul_tti_req->SFN, future_ul_tti_req->Slot, (slotP + num_slots - 1) % num_slots);
+//   /* future_ul_tti_req->Slot is fixed! */
+//   future_ul_tti_req->n_pdus = 0;
+//   future_ul_tti_req->n_ulsch = 0;
+//   future_ul_tti_req->n_ulcch = 0;
+//   future_ul_tti_req->n_group = 0;
+
+//   /* UL_tti_req is a simple pointer into the current UL_tti_req_ahead, i.e.,
+//    * it walks over UL_tti_req_ahead in a circular fashion */
+//   gNB->UL_tti_req[CC_idP] = &gNB->UL_tti_req_ahead[CC_idP][slotP];
+
+//   TX_req[CC_idP].Number_of_PDUs                  = 0;
+
+// }
 
 bool is_xlsch_in_slot(uint64_t bitmap, sub_frame_t slot) {
   if (slot>=64) return false; //quickfix for FR2 where there are more than 64 slots (bitmap to be removed)
@@ -135,7 +223,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
 
   start_meas(&RC.nrmac[module_idP]->eNB_scheduler);
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_gNB_DLSCH_ULSCH_SCHEDULER,VCD_FUNCTION_IN);
-
+  LOG_D(NR_MAC,"[yjn] NR_UL_indication in gNB_dlsch_ulsch_scheduler\n");
   pdcp_run(&ctxt);
   /* send tick to RLC and RRC every ms */
   if ((slot & ((1 << *scc->ssbSubcarrierSpacing) - 1)) == 0) {
@@ -152,17 +240,21 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
     // clear vrb_maps
     memset(cc[CC_id].vrb_map, 0, sizeof(uint16_t) * MAX_BWP_SIZE);
     // clear last scheduled slot's content (only)!
-    const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
-    const int last_slot = (slot + num_slots - 1) % num_slots;
+    const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing] + num_delay;
+    // const int last_slot = (slot + num_slots - 1) % num_slots;
+    // uint16_t *vrb_map_UL = cc[CC_id].vrb_map_UL;
+    // memcpy(&vrb_map_UL[last_slot * MAX_BWP_SIZE], &RC.nrmac[module_idP]->ulprbbl, sizeof(uint16_t) * MAX_BWP_SIZE);
+    LOG_D(NR_MAC,"[yjn] frame = %d, slot = %d\n",frame, slot);
+    const int last_slot = get_last_ul_tti_req_ind(gNB, frame, slot);  //add_yjn
     uint16_t *vrb_map_UL = cc[CC_id].vrb_map_UL;
-    memcpy(&vrb_map_UL[last_slot * MAX_BWP_SIZE], &RC.nrmac[module_idP]->ulprbbl, sizeof(uint16_t) * MAX_BWP_SIZE);
-
+    memset(&vrb_map_UL[last_slot * MAX_BWP_SIZE], 0, sizeof(uint16_t) * MAX_BWP_SIZE); //清空组内时隙号的上一时隙号的vrb_map_UL； //add_yjn
+    
     clear_nr_nfapi_information(RC.nrmac[module_idP], CC_id, frame, slot);
 
     /*VNF first entry into scheduler. Since frame numbers for future_ul_tti_req of some future slots 
     will not be set before we encounter them, set them here */
 
-    if (NFAPI_MODE == NFAPI_MODE_VNF){
+    if (NFAPI_MODE == NFAPI_MODE_VNF){  //VNF模式用不到，可以不改吧
       if(vnf_first_sched_entry == 1)
       {
         for (int i = 0; i<num_slots; i++){
@@ -184,9 +276,9 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
     LOG_I(NR_MAC, "Frame.Slot %d.%d\n%s\n", frame, slot, stats_output);
   }
 
-  nr_mac_update_timers(module_idP, frame, slot);
+  nr_mac_update_timers(module_idP, frame, slot);//add_yjn_未知新加
 
-  schedule_nr_bwp_switch(module_idP, frame, slot);
+  schedule_nr_bwp_switch(module_idP, frame, slot);//add_yjn_未知新加
 
   // This schedules MIB
   schedule_nr_mib(module_idP, frame, slot);
@@ -205,8 +297,8 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
        UL_tti_req_ahead), but be aware that, e.g., K2 is allowed to be larger
        (schedule_nr_prach will assert if resources are not free). */
     const sub_frame_t n_slots_ahead = nr_slots_per_frame[*scc->ssbSubcarrierSpacing] - 1;
-    const frame_t f = (frame + (slot + n_slots_ahead) / nr_slots_per_frame[*scc->ssbSubcarrierSpacing]) % 1024;
-    const sub_frame_t s = (slot + n_slots_ahead) % nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
+     const frame_t f = (frame + (slot + n_slots_ahead + num_delay) / nr_slots_per_frame[*scc->ssbSubcarrierSpacing]) % 1024;//add_yjn_test
+    const sub_frame_t s = (slot + n_slots_ahead+ num_delay) % nr_slots_per_frame[*scc->ssbSubcarrierSpacing];//add_yjn_test
     schedule_nr_prach(module_idP, f, s);
   }
 
@@ -219,7 +311,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
 
   // Schedule SRS: check in slot 0 for the whole frame
   if (slot == 0)
-    nr_schedule_srs(module_idP, frame);
+    nr_schedule_srs(module_idP, frame);//add_yjn_未知新加
 
   // This schedule RA procedure if not in phy_test mode
   // Otherwise already consider 5G already connected

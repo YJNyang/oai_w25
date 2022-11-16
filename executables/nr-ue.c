@@ -95,7 +95,7 @@
 
 #define RX_JOB_ID 0x1010
 #define TX_JOB_ID 100
-
+int slot_delay = 10; //add_yjn
 typedef enum {
   pss = 0,
   pbch = 1,

@@ -975,7 +975,7 @@ void nr_schedule_ue_spec(module_id_t module_id,
     DevAssert(!harq->is_waiting);
     add_tail_nr_list(&sched_ctrl->feedback_dl_harq, current_harq_pid);
     NR_sched_pucch_t *pucch = &sched_ctrl->sched_pucch[sched_pdsch->pucch_allocation];
-    harq->feedback_frame = pucch->frame;
+    harq->feedback_frame = (pucch->frame + 1)%1024;//add_yjn_test
     harq->feedback_slot = pucch->ul_slot;
     harq->is_waiting = true;
     UE->mac_stats.dl.rounds[harq->round]++;
