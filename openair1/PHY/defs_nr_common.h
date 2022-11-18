@@ -279,6 +279,7 @@ typedef uint32_t (*get_slot_from_timestamp_t)(openair0_timestamp timestamp_rx, N
 typedef uint32_t (*get_samples_slot_timestamp_t)(int slot, NR_DL_FRAME_PARMS* fp, uint8_t sl_ahead);
 
 struct NR_DL_FRAME_PARMS {
+  int ffo_corr_shift;
   /// frequency range
   nr_frequency_range_e freq_range;
   //  /// Placeholder to replace overlapping fields below

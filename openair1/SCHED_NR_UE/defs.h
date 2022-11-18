@@ -87,6 +87,8 @@ typedef struct {
   uint8_t xtra_byte;
 } fapiPbch_t;
 
+void UE_TrackSync_thread(void*arg);
+
 /** @addtogroup _PHY_PROCEDURES_
  * @{
  */

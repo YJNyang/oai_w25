@@ -94,7 +94,6 @@ int config_sync_var=-1;
 
 volatile int             start_gNB = 0;
 volatile int             oai_exit = 0;
-
 static int wait_for_sync = 0;
 
 unsigned int mmapped_dma=0;

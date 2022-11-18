@@ -38,6 +38,9 @@
     {"V" ,                       CONFIG_HLP_VCD,         PARAMFLAG_BOOL,  iptr:&vcdflag,                      defintval:0,     TYPE_INT,    0}, \
     {"uecap_file",               CONFIG_HLP_UECAP_FILE,  0,               strptr:(char **)&uecap_file,        defstrval:"./uecap.xml", TYPE_STRING, 0}, \
     {"rrc_config_path",          CONFIG_HLP_RRC_CFG_PATH,0,               strptr:(char **)&rrc_config_path,   defstrval:"./",  TYPE_STRING, 0}, \
+    {"doppler-shift",                NULL,                                            0,               iptr:(int32_t *)&doppler_shift,         defintval:0,     TYPE_INT,    0},  \
+    {"usrp-freq-off",                NULL,                                            0,               iptr:(int32_t *)&usrp_freq_off,         defintval:0,     TYPE_INT,    0},  \
+    {"rfsimu-if-enable",                NULL,         PARAMFLAG_BOOL,               iptr:&rfsimu_if_flag,         defintval:0,     TYPE_INT,    0},  \
     {"ue-idx-standalone",        NULL,                   0,               u16ptr:&ue_idx_standalone,          defuintval:0xFFFF,    TYPE_UINT16,   0} \
 }
 
@@ -71,6 +74,9 @@
     {"if_freq_off" ,             CONFIG_HLP_IF_FREQ_OFF, 0,               iptr:&(UE->if_freq_off),            defuintval:0,          TYPE_INT,   0}, \
     {"chest-freq",               CONFIG_HLP_CHESTFREQ,   0,               iptr:&(UE->chest_freq),             defintval:0,           TYPE_INT,   0}, \
     {"chest-time",               CONFIG_HLP_CHESTTIME,   0,               iptr:&(UE->chest_time),             defintval:0,           TYPE_INT,   0}, \
+    {"usrp-freq-off",                NULL,                                            0,               iptr:(int32_t *)&usrp_freq_off,         defintval:0,     TYPE_INT,    0},  \
+    {"rfsimu-if-enable",                NULL,         PARAMFLAG_BOOL,               iptr:&rfsimu_if_flag,         defintval:0,     TYPE_INT,    0},  \
+    {"ffo-corr-shift",             NULL,                   0,               iptr:&(fp->ffo_corr_shift),            defintval:0,          TYPE_INT,   0}, \
     {"ue-timing-correction-disable", CONFIG_HLP_DISABLETIMECORR, PARAMFLAG_BOOL, iptr:&(UE->no_timing_correction), defintval:0,      TYPE_INT,   0}, \
 }
 
@@ -81,6 +87,7 @@ typedef struct {
   uint8_t        nr_dlsch_parallel; // number of threads for dlsch decoding, 0 means no parallelization
   uint8_t        max_ldpc_iterations; // number of maximum LDPC iterations
   tpool_t        Tpool;             // thread pool 
+  tpool_t       SyncTpool;    // sync thread pool 
 } nrUE_params_t;
 extern uint64_t get_nrUE_optmask(void);
 extern uint64_t set_nrUE_optmask(uint64_t bitmask);
