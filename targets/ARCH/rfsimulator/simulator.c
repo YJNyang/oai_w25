@@ -52,6 +52,7 @@
 #define CHANNELMOD_DYNAMICLOAD
 #include <openair1/SIMULATION/TOOLS/sim.h>
 #include <targets/ARCH/rfsimulator/rfsimulator.h>
+//#include "openair1/PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 
 #define PORT 4043 //default TCP port for this simulator
 #define CirSize 6144000 // 100ms is enough
@@ -59,7 +60,7 @@
 #define byteToSample(a,b) ((a)/(sizeof(sample_t)*(b)))
 
 #define MAX_SIMULATION_CONNECTED_NODES 5
-#define GENERATE_CHANNEL 10 //each frame in DL
+#define GENERATE_CHANNEL 10 //each frame in DL 
 
 
 //
@@ -88,6 +89,74 @@
   };
 extern int num_delay;
 //#define NUM_DELAY  11 
+// #define NUM_DELAY 0  //add_yjn
+
+typedef struct complex16 sample_t; // 2*16 bits complex number
+
+//add_yjn
+static void fre_offset_compensation_simd(int32_t* rxdata, int start, int end, double off_angle) {
+    int nb_samples_within_simd = 8;
+    float phase_re = (float)cos(nb_samples_within_simd * off_angle);
+    float phase_im = (float)sin(nb_samples_within_simd * off_angle);
+    __m256 base_phase_re = _mm256_set1_ps(phase_re);
+    __m256 base_phase_im = _mm256_set1_ps(phase_im);
+    __m256 real_phase_re = _mm256_setr_ps(cos(start * off_angle), cos((start + 1) * off_angle), cos((start + 2) * off_angle), cos((start + 3) * off_angle),
+        cos((start + 4) * off_angle), cos((start + 5) * off_angle), cos((start + 6) * off_angle), cos((start + 7) * off_angle));
+    __m256 real_phase_im = _mm256_setr_ps(sin(start * off_angle), sin((start + 1) * off_angle), sin((start + 2) * off_angle), sin((start + 3) * off_angle),
+        sin((start + 4) * off_angle), sin((start + 5) * off_angle), sin((start + 6) * off_angle), sin((start + 7) * off_angle));
+
+    __m256 real_phase_re_tem;
+    __m256 real_phase_im_tem;
+    for (int n = start; n < end; n += 8) {
+
+        __m256 rx_re = _mm256_setr_ps((float)((short*)rxdata)[2 * n], (float)(((short*)rxdata))[2 * n + 2],
+                                              (float)(((short*)rxdata))[2 * n + 4], (float)(((short*)rxdata))[2 * n + 6],
+                                              (float)(((short*)rxdata))[2 * n + 8], (float)(((short*)rxdata))[2 * n + 10],
+                                              (float)(((short*)rxdata))[2 * n + 12], (float)(((short*)rxdata))[2 * n + 14]);
+        __m256 rx_im = _mm256_setr_ps((float)(((short*)rxdata))[2 * n + 1], (float)(((short*)rxdata))[2 * n + 3],
+                                              (float)(((short*)rxdata))[2 * n + 5], (float)(((short*)rxdata))[2 * n + 7],
+                                              (float)(((short*)rxdata))[2 * n + 9], (float)(((short*)rxdata))[2 * n + 11],
+                                              (float)(((short*)rxdata))[2 * n + 13], (float)(((short*)rxdata))[2 * n + 15]);
+
+        __m256 data_re = _mm256_fmsub_ps(rx_re, real_phase_re, _mm256_mul_ps(rx_im, real_phase_im)); 
+        __m256 data_im = _mm256_fmadd_ps(rx_im, real_phase_re, _mm256_mul_ps(rx_re, real_phase_im)); 
+
+        __m256i data_re_int = _mm256_cvtps_epi32(data_re);
+        __m256i data_im_int = _mm256_cvtps_epi32(data_im);
+        __m256i data = _mm256_blend_epi16(data_re_int, _mm256_slli_epi32(data_im_int, 16), 0b10101010);
+        _mm256_store_si256((__m256i*)(rxdata+start) + (n - start) / 8, data);
+
+        real_phase_re_tem = real_phase_re;
+        real_phase_im_tem = real_phase_im;
+        real_phase_re = _mm256_fmsub_ps(real_phase_re_tem, base_phase_re, _mm256_mul_ps(real_phase_im_tem, base_phase_im));
+        real_phase_im = _mm256_fmadd_ps(real_phase_im_tem, base_phase_re, _mm256_mul_ps(real_phase_re_tem, base_phase_im));
+
+    }
+}
+
+static void cfo_compensation(int32_t* rxdata, int64_t start, int64_t end, double off_angle){
+  double re,im;
+  int BlockSize = end - start;
+  int alignedstart = 8-(start%8);
+  int alignedend = BlockSize-(end%8);
+  
+  for(int n=start; n<start+alignedstart; n++){
+    re = ((double)(((short *)rxdata))[2*n]);
+    im = ((double)(((short *)rxdata))[2*n+1]);
+    ((short *)rxdata)[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
+    ((short *)rxdata)[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
+  }
+
+  fre_offset_compensation_simd(rxdata,start+alignedstart,start+alignedend,off_angle);
+
+  for(int n=start+alignedend; n<start+BlockSize; n++){
+      re = ((double)(((short *)rxdata))[2*n]);
+      im = ((double)(((short *)rxdata))[2*n+1]);
+      ((short *)rxdata)[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
+      ((short *)rxdata)[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
+  } 
+  return;
+}
 
 static int rfsimu_setchanmod_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 static telnetshell_cmddef_t rfsimu_cmdarray[] = {
@@ -100,7 +169,6 @@ static telnetshell_vardef_t rfsimu_vardef[] = {
 };
 pthread_mutex_t Sockmutex;
 
-typedef c16_t sample_t; // 2*16 bits complex number
 
 typedef struct buffer_s {
   int conn_sock;
@@ -117,7 +185,7 @@ typedef struct buffer_s {
 
 typedef struct {
   int listen_sock, epollfd;
-  openair0_timestamp nextRxTstamp;
+  openair0_timestamp nextTimestamp;
   openair0_timestamp lastWroteTS;
   uint64_t typeStamp;
   char *ip;
@@ -140,7 +208,7 @@ typedef struct {
 
 static void allocCirBuf(rfsimulator_state_t *bridge, int sock) {
   buffer_t *ptr=&bridge->buf[sock];
-  AssertFatal ( (ptr->circularBuf=(sample_t *) malloc(sampleToByte(CirSize,1))) != NULL, "");
+  AssertFatal ( (ptr->circularBuf=(sample_t *) memalign(32, sampleToByte(CirSize,1))) != NULL, "");
   ptr->circularBufEnd=((char *)ptr->circularBuf)+sampleToByte(CirSize,1);
   ptr->conn_sock=sock;
   ptr->lastReceivedTS=0;
@@ -154,7 +222,6 @@ static void allocCirBuf(rfsimulator_state_t *bridge, int sock) {
   ev.events = EPOLLIN | EPOLLRDHUP;
   ev.data.fd = sock;
   AssertFatal(epoll_ctl(bridge->epollfd, EPOLL_CTL_ADD,  sock, &ev) != -1, "");
-
   if ( bridge->channelmod > 0) {
     // create channel simulation model for this mode reception
     // snr_dB is pure global, coming from configuration paramter "-s"
@@ -196,7 +263,7 @@ static void removeCirBuf(rfsimulator_state_t *bridge, int sock) {
   free(bridge->buf[sock].circularBuf);
   // Fixme: no free_channel_desc_scm(bridge->buf[sock].channel_model) implemented
   // a lot of mem leaks
-  //free(bridge->buf[sock].channel_model);
+  free(bridge->buf[sock].channel_model);
   memset(&bridge->buf[sock], 0, sizeof(buffer_t));
   bridge->buf[sock].conn_sock=-1;
 }
@@ -429,7 +496,7 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t, openair0_timestamp
   if (!alreadyLocked)
     pthread_mutex_lock(&Sockmutex);
 
-  LOG_D(HW,"sending %d samples at time: %ld, nbAnt %d\n", nsamps, timestamp, nbAnt);
+  LOG_D(HW,"sending %d samples at time: %ld\n", nsamps, timestamp);
 
   for (int i=0; i<FD_SETSIZE; i++) {
     buffer_t *b=&t->buf[i];
@@ -495,7 +562,7 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, int nsamps_for_initi
       setblocking(conn_sock, notBlocking);
       allocCirBuf(t, conn_sock);
       LOG_I(HW,"A client connected, sending the current time\n");
-      c16_t v= {0};
+      struct complex16 v= {0};
       void *samplesVoid[t->tx_num_channels];
 
       for ( int i=0; i < t->tx_num_channels; i++)
@@ -549,14 +616,14 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, int nsamps_for_initi
                      (t->typeStamp == ENB_MAGICDL && b->th.magic==UE_MAGICDL), "Socket Error in protocol");
         b->headerMode=false;
 
-        if ( t->nextRxTstamp == 0 ) { // First block in UE, resync with the eNB current TS
-          t->nextRxTstamp=b->th.timestamp> nsamps_for_initial ?
+        if ( t->nextTimestamp == 0 ) { // First block in UE, resync with the eNB current TS
+          t->nextTimestamp=b->th.timestamp> nsamps_for_initial ?
                            b->th.timestamp -  nsamps_for_initial :
                            0;
           b->lastReceivedTS=b->th.timestamp> nsamps_for_initial ?
                             b->th.timestamp :
                             nsamps_for_initial;
-          LOG_W(HW,"UE got first timestamp: starting at %lu\n",  t->nextRxTstamp);
+          LOG_W(HW,"UE got first timestamp: starting at %lu\n",  t->nextTimestamp);
           b->trashingPacket=true;
         } else if ( b->lastReceivedTS < b->th.timestamp) {
           int nbAnt= b->th.nbAnt;
@@ -624,7 +691,7 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
   }
 
   rfsimulator_state_t *t = device->priv;
-  LOG_D(HW, "Enter rfsimulator_read, expect %d samples, will release at TS: %ld, nbAnt %d\n", nsamps, t->nextRxTstamp+nsamps, nbAnt);
+  LOG_D(HW, "Enter rfsimulator_read, expect %d samples, will release at TS: %ld\n", nsamps, t->nextTimestamp+nsamps);
   // deliver data from received data
   // check if a UE is connected
   int first_sock;
@@ -635,22 +702,54 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
 
   if ( first_sock ==  FD_SETSIZE ) {
     // no connected device (we are eNB, no UE is connected)
-    if ( t->nextRxTstamp == 0)
+    if ( t->nextTimestamp == 0)
       LOG_W(HW,"No connected device, generating void samples...\n");
 
     if (!flushInput(t, 10,  nsamps)) {
       for (int x=0; x < nbAnt; x++)
         memset(samplesVoid[x],0,sampleToByte(nsamps,1));
 
-      t->nextRxTstamp+=nsamps;
+      t->nextTimestamp+=nsamps;
 
-      if ( ((t->nextRxTstamp/nsamps)%100) == 0)
-        LOG_D(HW,"No UE, Generated void samples for Rx: %ld\n", t->nextRxTstamp);
+      if ( ((t->nextTimestamp/nsamps)%100) == 0)
+        LOG_D(HW,"No UE, Generated void samples for Rx: %ld\n", t->nextTimestamp);
 
-      *ptimestamp = t->nextRxTstamp-nsamps;
+      *ptimestamp = t->nextTimestamp-nsamps;
       return nsamps;
     }
   } else {
+    pthread_mutex_lock(&Sockmutex);
+
+    if ( t->nextTimestamp > 0 && t->lastWroteTS < t->nextTimestamp) {
+      pthread_mutex_unlock(&Sockmutex);
+      usleep(10000);
+      pthread_mutex_lock(&Sockmutex);
+
+      if ( t->lastWroteTS < t->nextTimestamp ) {
+        // Assuming Tx is not done fully in another thread
+        // We can never write is the past from the received time
+        // So, the node perform receive but will never write these symbols
+        // let's tell this to the opposite node
+        // We send timestamp for nb samples required
+        // assuming this should have been done earlier if a Tx would exist
+        pthread_mutex_unlock(&Sockmutex);
+        struct complex16 v= {0};
+        void *dummyS[t->tx_num_channels];
+
+        for ( int i=0; i < t->tx_num_channels; i++)
+          dummyS[i]=(void *)&v;
+
+        LOG_I(HW, "No samples Tx occured, so we send 1 sample to notify it: Tx:%lu, Rx:%lu\n",
+              t->lastWroteTS, t->nextTimestamp);
+        rfsimulator_write_internal(t, t->nextTimestamp,
+                                   dummyS, 1,
+                                   t->tx_num_channels, 1, true);
+      } else {
+        pthread_mutex_unlock(&Sockmutex);
+        LOG_W(HW, "trx_write came from another thread\n");
+      }
+    } else
+      pthread_mutex_unlock(&Sockmutex);
 
     bool have_to_wait;
 
@@ -661,7 +760,7 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
         buffer_t *b=&t->buf[sock];
 
         if ( b->circularBuf )
-          if ( t->nextRxTstamp+nsamps > b->lastReceivedTS ) {
+          if ( t->nextTimestamp+nsamps > b->lastReceivedTS ) {
             have_to_wait=true;
             break;
           }
@@ -670,7 +769,7 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
       if (have_to_wait)
         /*printf("Waiting on socket, current last ts: %ld, expected at least : %ld\n",
           ptr->lastReceivedTS,
-          t->nextRxTstamp+nsamps);
+          t->nextTimestamp+nsamps);
         */
         flushInput(t, 3, nsamps);
     } while (have_to_wait);
@@ -696,29 +795,128 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
         t->poll_telnetcmdq(t->telnetcmd_qid,t);
 
       for (int a=0; a<nbAnt; a++) {//loop over number of Rx antennas
-        if ( ptr->channel_model != NULL ) { // apply a channel model
-          rxAddInput(ptr->circularBuf, (c16_t *) samplesVoid[a],
-                     a,
-                     ptr->channel_model,
-                     nsamps,
-                     t->nextRxTstamp,
-                     CirSize);
-        }
-        else { // no channel modeling
+        // add_yjn
+        int samples_per_subframe = 2 * 30720;
+        float s_time = 1 / (1.0e3 * samples_per_subframe);      // sampling time
+        static float freq_offset_dynamic = 0;                   //动态频偏 (-60k, 60k)
+        static float freq_offset_static = -54321;                    //静态频偏 
+        static int flag = 1;                                    //1 The initial dynamic frequency offset increases; -1 the initial dynamic frequency offset decreases; 0 without dynamic frequency offset
+        int freq_offset_samples_step = samples_per_subframe/2;  //The sampling number of dynamic frequency offset changes; 0.35Hz per time slot, and the current change is in the unit of time slot.
+        float freq_offset_change_step = 0.35;                   
+        int32_t* tx_data =  (int32_t *)(&(ptr->circularBuf[0]));  //CirSize is the number of samples to the circularBuf
+        int64_t fre_offset_timestamp_start = 0;
+        int64_t fre_offset_timestamp_end = 0;
+        int i = 0;
+
+
+ 
+        // for (int i=0; i<16;i++)
+        // {
+        //   printf("==============data[i]=%d\n",tx_data[(t->nextTimestamp)%CirSize+i]);
+        // }
+        for (i=0; i<(nsamps/freq_offset_samples_step); i++){
+          /*Determine whether the sampling point exceeds the buffer boundary*/
+          fre_offset_timestamp_start = (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) < CirSize)?  ((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) : ((t->nextTimestamp)%CirSize + i * freq_offset_samples_step)%CirSize;
+
+          if (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) < CirSize) //第一个点没越界，看第二个是否越界；
+            fre_offset_timestamp_end = (((t->nextTimestamp)%CirSize + (i+1) * freq_offset_samples_step) < CirSize)? ((t->nextTimestamp)%CirSize + (i+1) * freq_offset_samples_step) : CirSize;
+          else if (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) >= CirSize) 
+            fre_offset_timestamp_end = ((t->nextTimestamp)%CirSize + (i+1) * freq_offset_samples_step)%CirSize;
           
-          double H_awgn_mimo[4][4] ={{1.0, 0.2, 0.1, 0.05}, //rx 0
-                                      {0.2, 1.0, 0.2, 0.1}, //rx 1
-                                     {0.1, 0.2, 1.0, 0.2}, //rx 2
-                                     {0.05, 0.1, 0.2, 1.0}};//rx 3
+          /*Set dynamic frequency offset growth according to flag*/
+          if (flag == 1){
+            freq_offset_dynamic = freq_offset_dynamic + freq_offset_change_step;
+            if(freq_offset_dynamic >= 59999.7) flag = -1;
+          }else if (flag == -1){
+            freq_offset_dynamic = freq_offset_dynamic - freq_offset_change_step;
+            if(freq_offset_dynamic <= -59999.7) flag = 1;
+          }else {
+            freq_offset_dynamic = 0;
+          }
+
+          /*  */
+          //LOG_W(HW, "=============================================================================================\n");
+          float freq_offset = freq_offset_static + freq_offset_dynamic;
+          double off_angle = 2 * M_PI * s_time * (freq_offset);  // offset rotation angle compensation per sample
+          if(fre_offset_timestamp_end == CirSize){  //针对最后一个点越界，第一个点每越界
+            cfo_compensation(tx_data, fre_offset_timestamp_start, CirSize, off_angle);
+            cfo_compensation(tx_data, 0, ((t->nextTimestamp)%CirSize + (i+1) * freq_offset_samples_step)%CirSize, off_angle);
+            //LOG_W(HW, "cfo_compensation start is %ld,end is %ld\n",fre_offset_timestamp_start,((t->nextTimestamp)%CirSize + (i+1) * freq_offset_samples_step)%CirSize);
+          }else{
+            cfo_compensation(tx_data, fre_offset_timestamp_start, fre_offset_timestamp_end, off_angle);//针对都越界或都没越界
+           // LOG_W(HW, "cfo_compensation start is %ld,end is %ld\n",fre_offset_timestamp_start,fre_offset_timestamp_end);
+          } 
+        }
+        
+
+        /* The number of sampling points less than one time slot is the frequency offset of the previous time slot */
+        if(nsamps-i*freq_offset_samples_step){
+          fre_offset_timestamp_start = (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) < CirSize)?  ((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) : ((t->nextTimestamp)%CirSize + i * freq_offset_samples_step)%CirSize;
+
+          if (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) < CirSize) 
+            fre_offset_timestamp_end = (((t->nextTimestamp)%CirSize + nsamps) < CirSize)? ((t->nextTimestamp)%CirSize + nsamps) : CirSize;
+          else if (((t->nextTimestamp)%CirSize + i * freq_offset_samples_step) >= CirSize) 
+            fre_offset_timestamp_end = ((t->nextTimestamp)%CirSize + nsamps)%CirSize;
+
+          if(nsamps-i*freq_offset_samples_step > 20700)
+          {
+            if (flag == 1) freq_offset_dynamic += 0.35;
+            else if (flag == -1) freq_offset_dynamic -= 0.35;
+              static int32_t count_unint = 0;
+              // printf("count_unint = %d\n",count_unint);
+              count_unint++;
+          }
+
+          float freq_offset = freq_offset_static + freq_offset_dynamic;
+          double off_angle = 2 * M_PI * s_time * (freq_offset);  // offset rotation angle compensation per sample
+          if(fre_offset_timestamp_end == CirSize){
+            cfo_compensation(tx_data, fre_offset_timestamp_start, CirSize, off_angle);
+            cfo_compensation(tx_data, 0, ((t->nextTimestamp)%CirSize + nsamps)%CirSize, off_angle);
+            //LOG_W(HW, "cfo_compensation start is %ld,end is %ld\n",fre_offset_timestamp_start,((t->nextTimestamp)%CirSize + nsamps)%CirSize);
+          }else{
+            cfo_compensation(tx_data, fre_offset_timestamp_start, fre_offset_timestamp_end, off_angle);//针对都越界或都没越界
+           // LOG_W(HW, "cfo_compensation start is %ld,end is %ld\n",fre_offset_timestamp_start,fre_offset_timestamp_end);
+          } 
+        }
+        // LOG_W(HW, "=============================================================================================\n");
+        // for (int i=0; i<16;i++)
+        // {
+        //   printf("==============data[i]=%d\n",tx_data[(t->nextTimestamp)%CirSize+i]);
+        // }
+
+        // printf("===============================freq_offset_static = %f\n",freq_offset_static);
+        // printf("===============================freq_offset_dynamic = %f\n",freq_offset_dynamic);
+
+        
+        if ( ptr->channel_model != NULL ) // apply a channel model
+        {
+          rxAddInput( ptr->circularBuf, (struct complex16 *) samplesVoid[a],
+                      a,
+                      ptr->channel_model,
+                      nsamps,
+                      t->nextTimestamp,
+                      CirSize
+                    );
+          //printf("===========================with channel modle nbAnt_tx = %d\n",ptr->channel_model->nb_tx);
+        }
+          
+        else { // no channel modeling
+          double H_awgn_mimo[4][4] ={{1.0, 0.5, 0.25, 0.125},//rx 0
+                                     {0.5, 1.0, 0.5, 0.25},  //rx 1
+                                     {0.25, 0.5, 1.0, 0.5},  //rx 2
+                                     {0.125, 0.25, 0.5, 1.0}};//rx 3
 
           sample_t *out=(sample_t *)samplesVoid[a];
           int nbAnt_tx = ptr->th.nbAnt;//number of Tx antennas
-
-          //LOG_I(HW, "nbAnt_tx %d\n",nbAnt_tx);
+          // LOG_W(HW, "Read Ant%d, ",a);
+          // LOG_W(HW, "nbAnt_tx%d\n",nbAnt_tx);
+          // LOG_W(HW, "circularBuf start is %ld,end is %ld\n",((t->nextTimestamp)*nbAnt_tx+nbAnt_tx-1)%CirSize,((t->nextTimestamp+nsamps)*nbAnt_tx+nbAnt_tx-1)%CirSize);
+          // LOG_W(HW, "=============================================================================================\n");//LOG_I(HW, "no channel modle nbAnt_tx %d\n",nbAnt_tx);
           for (int i=0; i < nsamps; i++) {//loop over nsamps
             for (int a_tx=0; a_tx<nbAnt_tx; a_tx++) { //sum up signals from nbAnt_tx antennas
-              out[i].r += (short)(ptr->circularBuf[((t->nextRxTstamp+i)*nbAnt_tx+a_tx)%CirSize].r*H_awgn_mimo[a][a_tx]);
-              out[i].i += (short)(ptr->circularBuf[((t->nextRxTstamp+i)*nbAnt_tx+a_tx)%CirSize].i*H_awgn_mimo[a][a_tx]);
+              //printf("====================================no channel modle nbAnt_tx = %d\n",nbAnt_tx);
+              out[i].r += (short)(ptr->circularBuf[((t->nextTimestamp+i)*nbAnt_tx+a_tx)%CirSize].r*H_awgn_mimo[a][a_tx]);
+              out[i].i += (short)(ptr->circularBuf[((t->nextTimestamp+i)*nbAnt_tx+a_tx)%CirSize].i*H_awgn_mimo[a][a_tx]);
             } // end for a_tx
           } // end for i (number of samps)
         } // end of no channel modeling
@@ -726,11 +924,11 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
     }
   }
 
-  *ptimestamp = t->nextRxTstamp; // return the time of the first sample
-  t->nextRxTstamp+=nsamps;
+  *ptimestamp = t->nextTimestamp; // return the time of the first sample
+  t->nextTimestamp+=nsamps;  //一个nextTimestamp等于一个采样点
   LOG_D(HW,"Rx to upper layer: %d from %ld to %ld, energy in first antenna %d\n",
         nsamps,
-        *ptimestamp, t->nextRxTstamp,
+        *ptimestamp, t->nextTimestamp,
         signal_energy(samplesVoid[0], nsamps));
   return nsamps;
 }
@@ -790,8 +988,7 @@ int device_init(openair0_device *device, openair0_config_t *openair0_cfg) {
 
   AssertFatal((rfsimulator->epollfd = epoll_create1(0)) != -1,"");
 
-  // we need to call randominit() for telnet server (use gaussdouble=>uniformrand)
-  randominit(0);
+  //randominit(0);
   set_taus_seed(0);
   /* look for telnet server, if it is loaded, add the channel modeling commands to it */
   add_telnetcmd_func_t addcmd = (add_telnetcmd_func_t)get_shlibmodule_fptr("telnetsrv", TELNET_ADDCMD_FNAME);

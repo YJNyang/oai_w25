@@ -1394,6 +1394,8 @@ void init_transport_channels(uint8_t);
 
 void generate_RIV_tables(void);
 
+void fre_offset_compensation_simd(int32_t* rxdata, int start, int end, double off_angle) ;
+
 /*!
   \brief This function performs the initial cell search procedure - PSS detection, SSS detection and PBCH detection.  At the
   end, the basic frame parameters are known (Frame configuration - TDD/FDD and cyclic prefix length,
@@ -1405,6 +1407,12 @@ void generate_RIV_tables(void);
 int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
                     PHY_VARS_NR_UE *phy_vars_ue, 
                     int n_frames,
+                    int sa);
+
+
+int nr_track_sync(PHY_VARS_NR_UE *phy_vars_ue, 
+                    int position,
+                    int length,
                     int sa);
 
 /*!
@@ -1429,11 +1437,15 @@ void nr_get_carrier_frequencies(PHY_VARS_NR_UE *ue,
 void nr_rf_card_config_gain(openair0_config_t *openair0_cfg,
                             double rx_gain_off);
 
-void nr_rf_card_config_freq(openair0_config_t *openair0_cfg,
+void nr_rf_card_config_freq_doppler(openair0_config_t *openair0_cfg,
                             uint64_t ul_Carrier,
                             uint64_t dl_Carrier,
                             int freq_offset);
 
+void nr_rf_card_config_freq(openair0_config_t *openair0_cfg,
+                            uint64_t ul_Carrier,
+                            uint64_t dl_Carrier,
+                            int freq_offset);
 
 void print_CQI(void *o,UCI_format_t uci_format,uint8_t eNB_id,int N_RB_DL);
 

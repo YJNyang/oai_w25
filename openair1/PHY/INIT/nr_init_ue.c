@@ -271,6 +271,10 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
     }
   }
 
+  // init cfo compensation cos sin buffer
+  common_vars->cfo_compen_cos = (double *) malloc16_clear( fp->samples_per_slot0*sizeof(double) );
+  common_vars->cfo_compen_sin = (double *) malloc16_clear( fp->samples_per_slot0*sizeof(double) );
+
   // ceil(((NB_RB<<1)*3)/32) // 3 RE *2(QPSK)
   int pdcch_dmrs_init_length =  (((fp->N_RB_DL<<1)*3)>>5)+1;
   //PDCCH DMRS init (gNB offset = 0)
@@ -549,6 +553,8 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
   }
 
   free_and_zero(ue->sinr_CQI_dB);
+  free_and_zero(ue->common_vars.cfo_compen_cos);
+  free_and_zero(ue->common_vars.cfo_compen_sin);
 }
 
 void term_nr_ue_transport(PHY_VARS_NR_UE *ue)

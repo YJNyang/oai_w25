@@ -256,6 +256,9 @@ typedef struct {
   int32_t freq_offset;
   /// eNb_id user is synched to
   int32_t eNb_id;
+
+  double *cfo_compen_sin;
+  double *cfo_compen_cos;
 } NR_UE_COMMON;
 
 typedef struct {
@@ -981,6 +984,16 @@ typedef struct {
   
   int dl_stats[5];
   void* scopeData;
+
+  SYNC_MODE_t SYNC_mode[NUMBER_OF_CONNECTED_gNB_MAX];
+
+  int32_t sync_pos_frame;
+  int32_t initial_sync_pos;
+  int32_t track_sync_fo; //+++++++++++++++++add_yjn++++++++跟踪同步时由pss计算得到的频偏
+  int32_t max_delay_offset;
+  int32_t delay_offset;
+  int32_t SamplesShift_Ready;
+  int32_t config_freq_satellite;
 } PHY_VARS_NR_UE;
 
 /* this structure is used to pass both UE phy vars and

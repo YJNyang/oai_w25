@@ -44,6 +44,11 @@
 #include "PHY/NR_REFSIG/pss_nr.h"
 #include "PHY/NR_REFSIG/sss_nr.h"
 #include "PHY/NR_REFSIG/refsig_defs_ue.h"
+#include<stdio.h>
+#include<immintrin.h>
+#include<stdint.h>
+#include<stdlib.h>
+#include<time.h>
 
 extern openair0_config_t openair0_cfg[];
 //static  nfapi_nr_config_request_t config_t;
@@ -52,6 +57,47 @@ int cnt=0;
 
 #define DEBUG_INITIAL_SYNCH
 
+
+
+//rxdata is single antennas_rx;   start:samples start
+void fre_offset_compensation_simd(int32_t* rxdata, int start, int end, double off_angle) {
+    int nb_samples_within_simd = 8;
+    // float s_time = 1 / (1.0e3 * samples_per_subframe);   // sampling time
+    // float off_angle = 2 * M_PI * s_time * (freq_offset);  // offset rotation angle compensation per sample
+    float phase_re = cos(nb_samples_within_simd * off_angle);
+    float phase_im = sin(nb_samples_within_simd * off_angle);
+    __m256 base_phase_re = _mm256_set1_ps(phase_re);
+    __m256 base_phase_im = _mm256_set1_ps(phase_im);
+    __m256 real_phase_re = _mm256_setr_ps(cos(start * off_angle), cos((start + 1) * off_angle), cos((start + 2) * off_angle), cos((start + 3) * off_angle),
+        cos((start + 4) * off_angle), cos((start + 5) * off_angle), cos((start + 6) * off_angle), cos((start + 7) * off_angle));
+    __m256 real_phase_im = _mm256_setr_ps(sin(start * off_angle), sin((start + 1) * off_angle), sin((start + 2) * off_angle), sin((start + 3) * off_angle),
+        sin((start + 4) * off_angle), sin((start + 5) * off_angle), sin((start + 6) * off_angle), sin((start + 7) * off_angle));
+
+    __m256 real_phase_re_tem;
+    __m256 real_phase_im_tem;
+    for (int n = start; n < end; n += 8) {
+        __m256 rx_re = _mm256_setr_ps((float)((short*)rxdata)[2 * n], (float)(((short*)rxdata))[2 * n + 2],
+                                              (float)(((short*)rxdata))[2 * n + 4], (float)(((short*)rxdata))[2 * n + 6],
+                                              (float)(((short*)rxdata))[2 * n + 8], (float)(((short*)rxdata))[2 * n + 10],
+                                              (float)(((short*)rxdata))[2 * n + 12], (float)(((short*)rxdata))[2 * n + 14]);
+        __m256 rx_im = _mm256_setr_ps((float)(((short*)rxdata))[2 * n + 1], (float)(((short*)rxdata))[2 * n + 3],
+                                              (float)(((short*)rxdata))[2 * n + 5], (float)(((short*)rxdata))[2 * n + 7],
+                                              (float)(((short*)rxdata))[2 * n + 9], (float)(((short*)rxdata))[2 * n + 11],
+                                              (float)(((short*)rxdata))[2 * n + 13], (float)(((short*)rxdata))[2 * n + 15]);
+        __m256 data_re = _mm256_fmsub_ps(rx_re, real_phase_re, _mm256_mul_ps(rx_im, real_phase_im)); 
+        __m256 data_im = _mm256_fmadd_ps(rx_im, real_phase_re, _mm256_mul_ps(rx_re, real_phase_im)); 
+
+        __m256i data_re_int = _mm256_cvtps_epi32(data_re);
+        __m256i data_im_int = _mm256_cvtps_epi32(data_im);
+        __m256i data = _mm256_blend_epi16(data_re_int, _mm256_slli_epi32(data_im_int, 16), 0b10101010);
+        _mm256_store_si256((__m256i*)(&rxdata[start]) +((n-start) / 8), data);
+        real_phase_re_tem = real_phase_re;
+        real_phase_im_tem = real_phase_im;
+        real_phase_re = _mm256_fmsub_ps(real_phase_re_tem, base_phase_re, _mm256_mul_ps(real_phase_im_tem, base_phase_im));
+        real_phase_im = _mm256_fmadd_ps(real_phase_im_tem, base_phase_re, _mm256_mul_ps(real_phase_re_tem, base_phase_im));
+
+    }
+}
 
 // create a new node of SSB structure
 NR_UE_SSB* create_ssb_node(uint8_t  i, uint8_t  h) {
@@ -210,7 +256,6 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
   int32_t accumulated_freq_offset = 0;
   int32_t metric_tdd_ncp=0;
   uint8_t phase_tdd_ncp;
-  double im, re;
   int is;
 
   NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
@@ -247,6 +292,9 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
 
     /* process pss search on received buffer */
     sync_pos = pss_synchro_nr(ue, is, NO_RATE_CHANGE);
+    if (sync_pos<0) continue;  // 如果PSS检测失败，则不进行频偏补偿等操作
+
+    ue->initial_sync_pos = is*fp->samples_per_frame + sync_pos;
 
     if (sync_pos >= fp->nb_prefix_samples)
       ue->ssb_offset = sync_pos - fp->nb_prefix_samples;
@@ -263,25 +311,15 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     // digital compensation of FFO for SSB symbols
     if (ue->UE_fo_compensation){
       double s_time = 1/(1.0e3*fp->samples_per_subframe);  // sampling time
-      double off_angle = -2*M_PI*s_time*(ue->common_vars.freq_offset);  // offset rotation angle compensation per sample
-
+      double off_angle = 2*M_PI*s_time*(ue->common_vars.freq_offset);  // offset rotation angle compensation per sample
+      LOG_I(PHY,"PSS Compensation %d Hz \n",ue->common_vars.freq_offset);
       // In SA we need to perform frequency offset correction until the end of buffer because we need to decode SIB1
       // and we do not know yet in which slot it goes.
-
-      // start for offset correction
       int start = sa ? is*fp->samples_per_frame : is*fp->samples_per_frame + ue->ssb_offset;
-
-      // loop over samples
       int end = sa ? n_frames*fp->samples_per_frame-1 : start + NR_N_SYMBOLS_SSB*(fp->ofdm_symbol_size + fp->nb_prefix_samples);
-
-      for(int n=start; n<end; n++){
-        for (int ar=0; ar<fp->nb_antennas_rx; ar++) {
-          re = ((double)(((short *)ue->common_vars.rxdata[ar]))[2*n]);
-          im = ((double)(((short *)ue->common_vars.rxdata[ar]))[2*n+1]);
-          ((short *)ue->common_vars.rxdata[ar])[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
-          ((short *)ue->common_vars.rxdata[ar])[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
-        }
-      }
+    
+      for (int ar=0; ar<fp->nb_antennas_rx; ar++) 
+        fre_offset_compensation_simd(ue->common_vars.rxdata[ar],start,end,off_angle);
     }
 
     /* check that SSS/PBCH block is continuous inside the received buffer */
@@ -315,8 +353,8 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
       // digital compensation of FFO for SSB symbols
       if (ue->UE_fo_compensation){
         double s_time = 1/(1.0e3*fp->samples_per_subframe);  // sampling time
-        double off_angle = -2*M_PI*s_time*freq_offset_sss;   // offset rotation angle compensation per sample
-
+        double off_angle = 2*M_PI*s_time*freq_offset_sss;   // offset rotation angle compensation per sample
+        LOG_I(PHY,"SSS Compensation %d Hz \n",freq_offset_sss);
         // In SA we need to perform frequency offset correction until the end of buffer because we need to decode SIB1
         // and we do not know yet in which slot it goes.
 
@@ -326,14 +364,8 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
         // loop over samples
         int end = sa ? n_frames*fp->samples_per_frame-1 : start + NR_N_SYMBOLS_SSB*(fp->ofdm_symbol_size + fp->nb_prefix_samples);
 
-        for(int n=start; n<end; n++){
-          for (int ar=0; ar<fp->nb_antennas_rx; ar++) {
-            re = ((double)(((short *)ue->common_vars.rxdata[ar]))[2*n]);
-            im = ((double)(((short *)ue->common_vars.rxdata[ar]))[2*n+1]);
-            ((short *)ue->common_vars.rxdata[ar])[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
-            ((short *)ue->common_vars.rxdata[ar])[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
-          }
-        }
+        for (int ar=0; ar<fp->nb_antennas_rx; ar++) 
+        fre_offset_compensation_simd(ue->common_vars.rxdata[ar],start,end,off_angle);
       }
 
       if (ret==0) { //we got sss channel
@@ -349,6 +381,7 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
         // every 7*(1<<mu) symbols there is a different prefix length (38.211 5.3.1)
         int n_symb_prefix0 = (ue->symbol_offset/(7*(1<<mu)))+1;
         sync_pos_frame = n_symb_prefix0*(fp->ofdm_symbol_size + fp->nb_prefix_samples0)+(ue->symbol_offset-n_symb_prefix0)*(fp->ofdm_symbol_size + fp->nb_prefix_samples);
+        ue->sync_pos_frame = sync_pos_frame;
         // for a correct computation of frame number to sync with the one decoded at MIB we need to take into account in which of the n_frames we got sync
         ue->init_sync_frame = n_frames - 1 - is;
 
@@ -372,13 +405,14 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
 
 
         // we also need to take into account the shift by samples_per_frame in case the if is true
-        if (ue->ssb_offset < sync_pos_frame){
-          ue->rx_offset = fp->samples_per_frame - sync_pos_frame + ue->ssb_offset;
-          ue->init_sync_frame += 1;
-        }
-        else
-          ue->rx_offset = ue->ssb_offset - sync_pos_frame;
-      }   
+            if (ue->ssb_offset < sync_pos_frame){
+            ue->rx_offset = fp->samples_per_frame - sync_pos_frame + ue->ssb_offset;
+            // ue->init_sync_frame += 1;
+          }
+          else
+            ue->rx_offset = ue->ssb_offset - sync_pos_frame;        
+      
+      }
 
     /*
     int nb_prefix_samples0 = fp->nb_prefix_samples0;
@@ -611,10 +645,37 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     if (dec == false) // sib1 not decoded
       ret = -1;
 
-    ue->common_vars.freq_offset = accumulated_freq_offset;
+    if(ret==0){
+          ue->common_vars.freq_offset = accumulated_freq_offset;
+          ue->track_sync_fo = ue->common_vars.freq_offset;
+    }
   }
   //  exit_fun("debug exit");
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_NR_INITIAL_UE_SYNC, VCD_FUNCTION_OUT);
   return ret;
+}
+
+
+int nr_track_sync(PHY_VARS_NR_UE *ue,
+                    int position,int length, int predict_flag)
+{
+    int32_t sync_pos;
+    NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
+    if(predict_flag)
+      return 0;
+    sync_pos = pss_track_synchro_nr(ue, position, length, NO_RATE_CHANGE);
+    if(sync_pos<0) return -1;
+
+    /* Calculate SSB position */
+    if (sync_pos >= fp->nb_prefix_samples)
+                ue->ssb_offset = sync_pos - fp->nb_prefix_samples;
+    else
+          ue->ssb_offset = sync_pos + (fp->samples_per_subframe * 10) - fp->nb_prefix_samples;
+
+    /* in case ssb in the second frame */
+    if (ue->ssb_offset > ue->frame_parms.samples_per_frame){
+          ue->ssb_offset +=  -ue->frame_parms.samples_per_frame;
+    }     
+    return 0;
 }
 
