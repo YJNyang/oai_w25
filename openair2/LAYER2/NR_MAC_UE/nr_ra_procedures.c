@@ -633,8 +633,9 @@ void nr_Msg3_transmitted(module_id_t mod_id, uint8_t CC_id, frame_t frameP, slot
   int subframes_per_slot = nr_slots_per_frame[mu]/10;
 
   // start contention resolution timer (cnt in slots)
+  int ra_ContentionResolution_delay_subframes = 270; //add_yjn
   int RA_contention_resolution_timer_subframes = (nr_rach_ConfigCommon->ra_ContentionResolutionTimer + 1)<<3;
-
+  RA_contention_resolution_timer_subframes = RA_contention_resolution_timer_subframes + ra_ContentionResolution_delay_subframes;//add_yjn
   ra->RA_contention_resolution_target_frame = frameP + (RA_contention_resolution_timer_subframes/10);
   ra->RA_contention_resolution_target_slot = (slotP + (RA_contention_resolution_timer_subframes * subframes_per_slot)) % nr_slots_per_frame[mu];
 

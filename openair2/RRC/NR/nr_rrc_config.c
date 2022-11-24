@@ -56,6 +56,8 @@ void rrc_coreset_config(NR_ControlResourceSet_t *coreset,
 
   // The ID space is used across the BWPs of a Serving Cell as per 38.331
   coreset->controlResourceSetId = bwp_id + 1;
+    // LOG_I(NR_MAC,"[yjn]coreset->controlResourceSetId = %d,bwp_id = %d\n",coreset->controlResourceSetId,bwp_id); //1:0;;//add_yjn
+  
 
   coreset->tci_StatesPDCCH_ToAddList=calloc(1,sizeof(*coreset->tci_StatesPDCCH_ToAddList));
   NR_TCI_StateId_t *tci[64];

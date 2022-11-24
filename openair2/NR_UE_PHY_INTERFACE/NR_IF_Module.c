@@ -1094,11 +1094,18 @@ int8_t handle_dlsch(nr_downlink_indication_t *dl_info, NR_UL_TIME_ALIGNMENT_t *u
   if (get_softmodem_params()->emulate_l1)
     dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid = g_harq_pid;
 
+  // update_harq_status(dl_info->module_id,
+  //                    dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid,
+  //                    dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);
+
+  if(dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack)
+    nr_ue_send_sdu(dl_info, ul_time_alignment, pdu_id);
+  LOG_D(NR_MAC,"[yjn]:(handle_dlsch) dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid = %d, ack = %d\n",dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid, dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);//add_yjn_harq
+
+  dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack = 1;//add_yjn_harq
   update_harq_status(dl_info->module_id,
                      dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid,
                      dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);
-  if(dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack)
-    nr_ue_send_sdu(dl_info, ul_time_alignment, pdu_id);
 
   return 0;
 }

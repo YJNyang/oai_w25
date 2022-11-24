@@ -86,8 +86,8 @@
     {"forgetfact",             "<channel forget factor ((0 to 1)>\n", simOpt,  dblptr:&(rfsimulator->chan_forgetfact), defdblval:0,                     TYPE_DOUBLE,    0 },\
     {"offset",                 "<channel offset in samps>\n",         simOpt,  iptr:&(rfsimulator->chan_offset),       defintval:0,                     TYPE_INT,       0 }\
   };
-
-#define NUM_DELAY  5.5 
+extern int num_delay;
+//#define NUM_DELAY  11 
 
 static int rfsimu_setchanmod_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 static telnetshell_cmddef_t rfsimu_cmdarray[] = {
@@ -593,7 +593,7 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, int nsamps_for_initi
 
         pthread_mutex_unlock(&Sockmutex);
         // b->transferPtr=(char *)&b->circularBuf[(b->lastReceivedTS*b->th.nbAnt)%CirSize];
-        b->transferPtr=(char *)&b->circularBuf[((b->lastReceivedTS+(int)(NUM_DELAY*30720))*b->th.nbAnt)%CirSize];  //add_yjn
+        b->transferPtr=(char *)&b->circularBuf[((b->lastReceivedTS+(int)(num_delay*30720 / 2))*b->th.nbAnt)%CirSize];  //add_yjn
         b->remainToTransfer=sampleToByte(b->th.size, b->th.nbAnt);
       }
 

@@ -49,7 +49,7 @@
 #endif
 
 //#define ONE_OVER_SQRT2 23170 // 32767/sqrt(2) = 23170 (ONE_OVER_SQRT2)
-
+extern int num_delay;//add_yjn
 void nr_generate_pucch0(PHY_VARS_NR_UE *ue,
                         int32_t **txdataF,
                         NR_DL_FRAME_PARMS *frame_parms,
@@ -89,10 +89,10 @@ void nr_generate_pucch0(PHY_VARS_NR_UE *ue,
    */
   // the value of u,v (delta always 0 for PUCCH) has to be calculated according to TS 38.211 Subclause 6.3.2.2.1
   uint8_t u[2]={0,0},v[2]={0,0};
-
+  
   LOG_D(PHY,"pucch0: slot %d nr_symbols %d, start_symbol %d, prb_start %d, second_hop_prb %d,  group_hop_flag %d, sequence_hop_flag %d, mcs %d\n",
         nr_slot_tx,pucch_pdu->nr_of_symbols,pucch_pdu->start_symbol_index,pucch_pdu->prb_start,pucch_pdu->second_hop_prb,pucch_pdu->group_hop_flag,pucch_pdu->sequence_hop_flag,pucch_pdu->mcs);
-
+  int pucch0_num_delay = (nr_slot_tx +num_delay)%20;   //add_yjn
 #ifdef DEBUG_NR_PUCCH_TX
   printf("\t [nr_generate_pucch0] sequence generation: variable initialization for test\n");
 #endif
@@ -104,17 +104,24 @@ void nr_generate_pucch0(PHY_VARS_NR_UE *ue,
 
   // we proceed to calculate alpha according to TS 38.211 Subclause 6.3.2.2.2
   int prb_offset[2]={startingPRB,startingPRB};
-  nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,0,nr_slot_tx,&u[0],&v[0]); // calculating u and v value
+  // nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,0,nr_slot_tx,&u[0],&v[0]); // calculating u and v value
+  nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,0,pucch0_num_delay,&u[0],&v[0]); // calculating u and v value //add_yjn
   if (pucch_pdu->freq_hop_flag == 1) {
-    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,1,nr_slot_tx,&u[1],&v[1]); // calculating u and v value
+    // nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,1,nr_slot_tx,&u[1],&v[1]); // calculating u and v value
+    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,1,pucch0_num_delay,&u[1],&v[1]); // calculating u and v value //add_yjn
     prb_offset[1] = pucch_pdu->second_hop_prb;
   }
   for (int l=0; l<pucch_pdu->nr_of_symbols; l++) {
+    // alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,
+    //                                 pucch_pdu->initial_cyclic_shift,
+    //                                 pucch_pdu->mcs,l,
+    //                                 pucch_pdu->start_symbol_index,
+    //                                 nr_slot_tx);
     alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,
                                     pucch_pdu->initial_cyclic_shift,
                                     pucch_pdu->mcs,l,
                                     pucch_pdu->start_symbol_index,
-                                    nr_slot_tx);
+                                    pucch0_num_delay);
 #ifdef DEBUG_NR_PUCCH_TX
     printf("\t [nr_generate_pucch0] sequence generation \tu=%d \tv=%d \talpha=%lf \t(for symbol l=%d)\n",u[l],v[l],alpha,l);
 #endif
@@ -191,6 +198,7 @@ void nr_generate_pucch1(PHY_VARS_NR_UE *ue,
    *
    */
   // complex-valued symbol d_re, d_im containing complex-valued symbol d(0):
+   int pucch1_dmrs_num_delay = (nr_slot_tx + num_delay)%20;   //add_yjn
   int16_t d_re=0, d_im=0;
 
   if (pucch_pdu->n_bit == 1) { // using BPSK if M_bit=1 according to TC 38.211 Subclause 5.1.2
@@ -291,9 +299,11 @@ void nr_generate_pucch1(PHY_VARS_NR_UE *ue,
            n_hop,nr_slot_tx);
 #endif
     pucch_GroupHopping_t pucch_GroupHopping = pucch_pdu->group_hop_flag + (pucch_pdu->sequence_hop_flag<<1);
-    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,nr_slot_tx,&u,&v); // calculating u and v value
-    alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,lprime,nr_slot_tx);
-
+    // nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,nr_slot_tx,&u,&v); // calculating u and v value
+    // alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,lprime,nr_slot_tx);
+    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,pucch1_dmrs_num_delay,&u,&v); // calculating u and v value //add_yjn
+    alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,lprime,pucch1_dmrs_num_delay);  //add_yjn
+    
     for (int n=0; n<12; n++) {
       r_u_v_alpha_delta_re[n] = (int16_t)(((((int32_t)(round(32767*cos(alpha*n))) * table_5_2_2_2_2_Re[u][n])>>15)
                                            - (((int32_t)(round(32767*sin(alpha*n))) * table_5_2_2_2_2_Im[u][n])>>15))); // Re part of base sequence shifted by alpha
@@ -1045,8 +1055,9 @@ void nr_generate_pucch2(PHY_VARS_NR_UE *ue,
 
   for (int l=0; l<pucch_pdu->nr_of_symbols; l++) {
     // c_init calculation according to TS38.211 subclause
-    x2 = (((1<<17)*((14*nr_slot_tx) + (l+startingSymbolIndex) + 1)*((2*pucch_pdu->dmrs_scrambling_id) + 1)) + (2*pucch_pdu->dmrs_scrambling_id))%(1U<<31); 
-
+    int pucch2_dmrs_delay_slot = (nr_slot_tx +  num_delay)%20;//add_yjn
+    // x2 = (((1<<17)*((14*nr_slot_tx) + (l+startingSymbolIndex) + 1)*((2*pucch_pdu->dmrs_scrambling_id) + 1)) + (2*pucch_pdu->dmrs_scrambling_id))%(1U<<31); 
+    x2 = (((1<<17)*((14*pucch2_dmrs_delay_slot) + (l+startingSymbolIndex) + 1)*((2*pucch_pdu->dmrs_scrambling_id) + 1)) + (2*pucch_pdu->dmrs_scrambling_id))%(1U<<31); //add_yjn
     int reset = 1;
     for (int ii=0; ii<=(startingPRB>>2); ii++) {
       s = lte_gold_generic(&x1, &x2, reset);
@@ -1133,6 +1144,7 @@ void nr_generate_pucch3_4(PHY_VARS_NR_UE *ue,
 #ifdef DEBUG_NR_PUCCH_TX
   printf("\t [nr_generate_pucch3_4] start function at slot(nr_slot_tx)=%d with payload=%lu and nr_bit=%d\n", nr_slot_tx, pucch_pdu->payload, pucch_pdu->n_bit);
 #endif
+  int pucch3_4_dmrs_num_delay = (nr_slot_tx + num_delay)%20;   //add_yjn
   // b is the block of bits transmitted on the physical channel after payload coding
   uint64_t b[16];
   // M_bit is the number of bits of block b (payload after encoding)
@@ -1458,8 +1470,8 @@ void nr_generate_pucch3_4(PHY_VARS_NR_UE *ue,
     if ((intraSlotFrequencyHopping == 1) && (l >= (int)floor(nrofSymbols/2))) n_hop = 1; // n_hop = 1 for second hop
 
     pucch_GroupHopping_t pucch_GroupHopping = pucch_pdu->group_hop_flag + (pucch_pdu->sequence_hop_flag<<1);
-    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,nr_slot_tx,&u,&v); // calculating u and v value
-
+    // nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,nr_slot_tx,&u,&v); // calculating u and v value
+    nr_group_sequence_hopping(pucch_GroupHopping,pucch_pdu->hopping_id,n_hop,pucch3_4_dmrs_num_delay,&u,&v);  //add_yjn
     // Next we proceed to calculate base sequence for DM-RS signal, according to TS 38.211 subclause 6.4.1.33
     if (nrofPRB >= 3) { // TS 38.211 subclause 5.2.2.1 (Base sequences of length 36 or larger) applies
       int i = 4;
@@ -1505,8 +1517,8 @@ void nr_generate_pucch3_4(PHY_VARS_NR_UE *ue,
 
     uint8_t  startingSymbolIndex = pucch_pdu->start_symbol_index;
     uint16_t j=0;
-    alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,startingSymbolIndex,nr_slot_tx);
-
+    // alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,startingSymbolIndex,nr_slot_tx); 
+    alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id,m0,mcs,l,startingSymbolIndex,pucch3_4_dmrs_num_delay); //add_yjn
     for (int rb=0; rb<nrofPRB; rb++) {
       if ((intraSlotFrequencyHopping == 1) && (l<floor(nrofSymbols/2))) { // intra-slot hopping enabled, we need to calculate new offset PRB
         startingPRB = startingPRB + pucch_pdu->second_hop_prb;

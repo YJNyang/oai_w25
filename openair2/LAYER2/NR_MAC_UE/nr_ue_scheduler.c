@@ -59,7 +59,6 @@
 #include "LAYER2/NR_MAC_COMMON/nr_mac_extern.h"
 
 //#define SRS_DEBUG
-extern float slot_delay;//add_yjn
 static prach_association_pattern_t prach_assoc_pattern;
 static ssb_list_info_t ssb_list;
 
@@ -1594,7 +1593,7 @@ int nr_ue_pusch_scheduler(NR_UE_MAC_INST_t *mac,
                 k2+delta,DURATION_RX_TO_TX);
 
     *slot_tx = (current_slot + k2 + delta) % nr_slots_per_frame[mu];
-    if (current_slot + k2 + delta > (nr_slots_per_frame[mu] - 1)){ //add_yjn
+    if (current_slot + k2 + delta > (nr_slots_per_frame[mu] - 1)){ //add_yjn_debug
       *frame_tx = (current_frame + 1) % 1024;
     } else {
       *frame_tx = current_frame;
@@ -2176,6 +2175,7 @@ static void map_ssb_to_ro(NR_UE_MAC_INST_t *mac) {
   } // for association_period_index
 }
 
+
 // Returns a RACH occasion if any matches the SSB idx, the frame and the slot
 static int get_nr_prach_info_from_ssb_index(uint8_t ssb_idx,
                                             int frame,
@@ -2193,21 +2193,16 @@ static int get_nr_prach_info_from_ssb_index(uint8_t ssb_idx,
   //      - exact slot number
   //      - frame offset
   ssb_info_p = &ssb_list.tx_ssb[ssb_idx];
-  int prach_slot = (slot + (int)(2*slot_delay)) % 20;  //add_yjn
-  int prach_frame = (frame + (slot + (int)(2*slot_delay)) / 20) % 1024;//add_yj
   LOG_D(NR_MAC,"checking for prach : ssb_info_p->nb_mapped_ro %d\n",ssb_info_p->nb_mapped_ro);
   for (uint8_t n_mapped_ro=0; n_mapped_ro<ssb_info_p->nb_mapped_ro; n_mapped_ro++) {
     LOG_D(NR_MAC,"%d.%d: mapped_ro[%d]->frame.slot %d.%d, prach_assoc_pattern.nb_of_frame %d\n",
           frame,slot,n_mapped_ro,ssb_info_p->mapped_ro[n_mapped_ro]->frame,ssb_info_p->mapped_ro[n_mapped_ro]->slot,prach_assoc_pattern.nb_of_frame);
-    // if ((slot == ssb_info_p->mapped_ro[n_mapped_ro]->slot) &&
-    //     (ssb_info_p->mapped_ro[n_mapped_ro]->frame == (frame % prach_assoc_pattern.nb_of_frame))) {
-    
-    if ((prach_slot == ssb_info_p->mapped_ro[n_mapped_ro]->slot) &&   //add_yjn
-        (ssb_info_p->mapped_ro[n_mapped_ro]->frame == (prach_frame % prach_assoc_pattern.nb_of_frame))) {  //add_yjn
+    if ((slot == ssb_info_p->mapped_ro[n_mapped_ro]->slot) &&
+        (ssb_info_p->mapped_ro[n_mapped_ro]->frame == (frame % prach_assoc_pattern.nb_of_frame))) {
+
       uint8_t prach_config_period_nb = ssb_info_p->mapped_ro[n_mapped_ro]->frame / prach_assoc_pattern.prach_conf_period_list[0].nb_of_frame;
       uint8_t frame_nb_in_prach_config_period = ssb_info_p->mapped_ro[n_mapped_ro]->frame % prach_assoc_pattern.prach_conf_period_list[0].nb_of_frame;
-      //prach_occasion_slot_p = &prach_assoc_pattern.prach_conf_period_list[prach_config_period_nb].prach_occasion_slot_map[frame_nb_in_prach_config_period][slot];
-      prach_occasion_slot_p = &prach_assoc_pattern.prach_conf_period_list[prach_config_period_nb].prach_occasion_slot_map[frame_nb_in_prach_config_period][prach_slot];  //add_yjn
+      prach_occasion_slot_p = &prach_assoc_pattern.prach_conf_period_list[prach_config_period_nb].prach_occasion_slot_map[frame_nb_in_prach_config_period][slot];
     }
   }
 
@@ -2259,6 +2254,7 @@ static int get_nr_prach_info_from_ssb_index(uint8_t ssb_idx,
 
   return 0;
 }
+
 
 // Build the SSB to RO mapping upon RRC configuration update
 void build_ssb_to_ro_map(NR_UE_MAC_INST_t *mac) {
@@ -2751,6 +2747,8 @@ void nr_ue_prach_scheduler(module_id_t module_idP, frame_t frameP, sub_frame_t s
     } // is_nr_prach_slot
   } // if is_nr_UL_slot
 }
+
+
 
 // This function schedules the reception of SIB1 after initial sync and before going to real time state
 void nr_ue_sib1_scheduler(module_id_t module_idP,

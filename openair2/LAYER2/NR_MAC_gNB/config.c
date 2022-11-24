@@ -480,11 +480,19 @@ int rrc_mac_config_req_gNB(module_id_t Mod_idP,
 
   if (scc != NULL ) {
     AssertFatal((scc->ssb_PositionsInBurst->present > 0) && (scc->ssb_PositionsInBurst->present < 4), "SSB Bitmap type %d is not valid\n",scc->ssb_PositionsInBurst->present);
-
-    // const int n = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
+    
     const int n = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];//add_yjn
+
+    int num_slots = 40;
+    if (num_delay <= 20)  num_slots = n + 20;     //  if 30khz, 40 slot
+    else if (num_delay<=60) num_slots = n + 60;     //  if 30khz, 80 slot
+    else if (num_delay<=140) num_slots = n + 140;     //  if 30khz, 160 slot
+    else if (num_delay<=300) num_slots = n + 300;     //  if 30khz, 320 slot
+    else  LOG_E(NR_MAC,"RTT-slot only support <= 300\n");
+
     RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL =
-        calloc((n+ 20) * MAX_BWP_SIZE, sizeof(uint16_t));//add_yjn
+        calloc((num_slots) * MAX_BWP_SIZE, sizeof(uint16_t));//add_yjn
+
     AssertFatal(RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL,
                 "could not allocate memory for RC.nrmac[]->common_channels[0].vrb_map_UL\n");
 
@@ -531,7 +539,7 @@ int rrc_mac_config_req_gNB(module_id_t Mod_idP,
       // if TDD configuration is not present and the band is not FDD, it means it is a dynamic TDD configuration
       AssertFatal(RC.nrmac[Mod_idP]->common_channels[0].frame_type == FDD,"Dynamic TDD not handled yet\n");
 
-    for (int slot = 0; slot < (n+20); ++slot) {//add_yjn_test_!!!!!!!!!!!!!
+    for (int slot = 0; slot < (num_slots); ++slot) {//add_yjn_test_!!!!!!!!!!!!!
       RC.nrmac[Mod_idP]->dlsch_slot_bitmap[slot / 64] |= (uint64_t)((slot % nr_slots_period) < nr_dl_slots) << (slot % 64);//add_yjn 改成纯下行时隙
       RC.nrmac[Mod_idP]->ulsch_slot_bitmap[slot / 64] |= (uint64_t)((slot % nr_slots_period) >= nr_ulstart_slot) << (slot % 64);
 

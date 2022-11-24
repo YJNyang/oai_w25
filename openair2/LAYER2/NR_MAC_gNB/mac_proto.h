@@ -464,12 +464,16 @@ void reset_dl_harq_list(NR_UE_sched_ctrl_t *sched_ctrl);
 
 void reset_ul_harq_list(NR_UE_sched_ctrl_t *sched_ctrl);
 
+// void handle_nr_ul_harq(const int CC_idP,
+//                        module_id_t mod_id,
+//                        frame_t frame,
+//                        sub_frame_t slot,
+//                        const nfapi_nr_crc_t *crc_pdu);
 void handle_nr_ul_harq(const int CC_idP,
                        module_id_t mod_id,
                        frame_t frame,
                        sub_frame_t slot,
-                       const nfapi_nr_crc_t *crc_pdu);
-
+                       nfapi_nr_crc_t *crc_pdu);//add_yjn_harq
 int16_t ssb_index_from_prach(module_id_t module_idP,
                              frame_t frameP,
 			     sub_frame_t slotP,

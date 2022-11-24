@@ -47,6 +47,8 @@ char *parallel_config=NULL;
 char *worker_config=NULL;
 int usrp_tx_thread = 0;
 
+int num_delay = 11; //add_yjn       //delay 20 slot for scs 30kHz 
+
 uint8_t nfapi_mode=0;
 
 static mapping softmodem_funcs[] = MAPPING_SOFTMODEM_FUNCTIONS;

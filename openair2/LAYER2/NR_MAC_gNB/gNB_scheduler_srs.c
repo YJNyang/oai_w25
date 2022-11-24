@@ -34,6 +34,7 @@
 
 extern RAN_CONTEXT_t RC;
 extern int num_delay;  //add_yjn
+int get_future_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slot);//add_yjn
 void nr_configure_srs(nfapi_nr_srs_pdu_t *srs_pdu, int module_id, int CC_id,NR_UE_info_t*  UE, NR_SRS_Resource_t *srs_resource) {
 
   gNB_MAC_INST *nrmac = RC.nrmac[module_id];
@@ -177,8 +178,9 @@ void nr_schedule_srs(int module_id, frame_t frame) {
       if ( ((frame - offset/n_slots_frame)*n_slots_frame)%period == 0) {
         LOG_D(NR_MAC,"Scheduling SRS reception for %d.%d\n", frame, offset%n_slots_frame);
         sub_frame_t srs_slot = (offset + num_delay)%n_slots_frame;//add_yjn
-        frame_t srs_frame = (offset + num_delay)>=20 ? (frame + 1)%1024:frame;//add_yjn
-        int future_index = get_future_ul_tti_req_ind(srs_frame, srs_slot);//add_yjn
+        frame_t srs_frame = (frame + (offset + num_delay)/n_slots_frame)%1024;//add_yjn
+         LOG_I(NR_MAC,"srs_frame = %d, srs_slot = %d\n",srs_frame, srs_slot);
+        int future_index = get_future_ul_tti_req_ind(nrmac, srs_frame, srs_slot);//add_yjn
         // nr_fill_nfapi_srs(module_id, CC_id, UE, offset%n_slots_frame, srs_resource);
         nr_fill_nfapi_srs(module_id, CC_id, UE,future_index, srs_resource); //add_yjn
         sched_ctrl->sched_srs.frame = frame;
