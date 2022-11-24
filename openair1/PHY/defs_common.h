@@ -872,6 +872,13 @@ typedef enum {
   NUM_UE_MODE=6
 } UE_MODE_t;
 
+typedef enum {
+  INIT_SYNC=0,
+  WAIT_SYNC=1,
+  TRACK_SYNC=2,
+  NUM_SYNC_MOD=3
+} SYNC_MODE_t;
+
 #define FOREACH_PARALLEL(GEN)   \
   GEN(PARALLEL_SINGLE_THREAD)   \
   GEN(PARALLEL_RU_L1_SPLIT)     \

@@ -291,7 +291,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
 
   // Schedule SRS: check in slot 0 for the whole frame
   if (slot == 0)
-    nr_schedule_srs(module_idP, frame);
+    nr_schedule_srs(module_idP, frame);//add_yjn_未知新加
 
   // This schedule RA procedure if not in phy_test mode
   // Otherwise already consider 5G already connected

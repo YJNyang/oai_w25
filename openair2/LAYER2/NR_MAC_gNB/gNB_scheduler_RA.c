@@ -44,10 +44,11 @@
 #include <executables/softmodem-common.h>
 extern RAN_CONTEXT_t RC;
 extern const uint8_t nr_slots_per_frame[5];
-extern int num_delay;
+//extern uint16_t sl_ahead;
+int num_delay = 20;  //add_yjn++++++++++注意值
 uint8_t DELTA[4]= {2,3,4,6};
 
-int get_future_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slot);//add_yjn
+int get_future_ul_tti_req_ind(frame_t frame, sub_frame_t slot);          //+++++add_yjn
 #define MAX_NUMBER_OF_SSB 64		
 float ssb_per_rach_occasion[8] = {0.125,0.25,0.5,1,2,4,8};
 

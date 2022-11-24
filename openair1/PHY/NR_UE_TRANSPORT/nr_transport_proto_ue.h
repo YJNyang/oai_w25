@@ -1406,7 +1406,10 @@ int nr_initial_sync(UE_nr_rxtx_proc_t *proc,
                     PHY_VARS_NR_UE *phy_vars_ue, 
                     int n_frames,
                     int sa);
+int nr_track_sync(PHY_VARS_NR_UE *ue,
+                    int position,int length, int predict_flag);
 
+void fre_offset_compensation_simd(int32_t* rxdata, int start, int end, double off_angle);
 /*!
   \brief This function gets the carrier frequencies either from FP or command-line-set global variables, depending on the availability of the latter
   @param fp         Pointer to frame params
@@ -1428,6 +1431,11 @@ void nr_get_carrier_frequencies(PHY_VARS_NR_UE *ue,
 */
 void nr_rf_card_config_gain(openair0_config_t *openair0_cfg,
                             double rx_gain_off);
+
+void nr_rf_card_config_freq_doppler(openair0_config_t *openair0_cfg,
+                            uint64_t ul_carrier,
+                            uint64_t dl_carrier,
+                            int freq_offset);
 
 void nr_rf_card_config_freq(openair0_config_t *openair0_cfg,
                             uint64_t ul_Carrier,
