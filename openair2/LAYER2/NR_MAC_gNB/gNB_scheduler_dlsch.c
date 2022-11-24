@@ -594,6 +594,7 @@ void pf_dl(module_id_t module_id,
     const uint32_t b = UE->mac_stats.dl.current_bytes;
     UE->dl_thr_ue = (1 - a) * UE->dl_thr_ue + a * b;
 
+    LOG_D(NR_MAC,"[yjn]:(pf_dl)sched_pdsch->dl_harq_pid = %d\n",sched_pdsch->dl_harq_pid);//add_yjn_harq
     /* retransmission */
     if (sched_pdsch->dl_harq_pid >= 0) {
       /* Allocate retransmission */
@@ -905,12 +906,18 @@ void nr_schedule_ue_spec(module_id_t module_id,
   if (!is_xlsch_in_slot(gNB_mac->dlsch_slot_bitmap[slot / 64], slot))
     return;
 
+ NR_UEs_t *UE_info = &RC.nrmac[module_id]->UE_info;//add_yjn_128delay
+ UE_iterator(UE_info->list, UE) {  //add_yjn_128delay
+    NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+    if (sched_ctrl->rrc_processing_timer > 0) continue;
+
   //if (slot==7 || slot == 17) return;
 
   /* PREPROCESSOR */
   gNB_mac->pre_processor_dl(module_id, frame, slot);
   const int CC_id = 0;
   NR_ServingCellConfigCommon_t *scc = gNB_mac->common_channels[CC_id].ServingCellConfigCommon;
+  const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing]; //add_yjn
   NR_UEs_t *UE_info = &gNB_mac->UE_info;
   nfapi_nr_dl_tti_request_body_t *dl_req = &gNB_mac->DL_req[CC_id].dl_tti_request_body;
 
@@ -975,8 +982,8 @@ void nr_schedule_ue_spec(module_id_t module_id,
     DevAssert(!harq->is_waiting);
     add_tail_nr_list(&sched_ctrl->feedback_dl_harq, current_harq_pid);
     NR_sched_pucch_t *pucch = &sched_ctrl->sched_pucch[sched_pdsch->pucch_allocation];
-    harq->feedback_frame = (pucch->ul_slot + num_delay) >=20?  (pucch->frame + 1)%1024 : pucch->frame;//add_yjn_test
-    harq->feedback_slot = (pucch->ul_slot + num_delay)%20;//add_yjn_test
+    harq->feedback_frame = (pucch->frame + (pucch->ul_slot + num_delay)/num_slots) % 1024;//add_yjn
+    harq->feedback_slot = (pucch->ul_slot + num_delay) % num_slots;//add_yjn_test
     harq->is_waiting = true;
     UE->mac_stats.dl.rounds[harq->round]++;
     LOG_D(NR_MAC,
@@ -1176,7 +1183,8 @@ void nr_schedule_ue_spec(module_id_t module_id,
     dci_payload.time_domain_assignment.val = ps->time_domain_allocation;
     dci_payload.mcs = sched_pdsch->mcs;
     dci_payload.rv = pdsch_pdu->rvIndex[0];
-    dci_payload.harq_pid = current_harq_pid;
+    dci_payload.harq_pid = (current_harq_pid)%16;//add_yjn_harq 
+    LOG_I(NR_MAC,"[yjn]:(nr_schedule_ue_spec)current_harq_pid = %d,dci_payload.harq_pid = %d\n",current_harq_pid,dci_payload.harq_pid);
     dci_payload.ndi = harq->ndi;
     dci_payload.dai[0].val = (pucch->dai_c-1)&3;
     dci_payload.tpc = sched_ctrl->tpc1; // TPC for PUCCH: table 7.2.1-1 in 38.213
@@ -1383,5 +1391,6 @@ void nr_schedule_ue_spec(module_id_t module_id,
     gNB_mac->TX_req[CC_id].Slot = slot;
     /* mark UE as scheduled */
     sched_pdsch->rbSize = 0;
+  }
   }
 }

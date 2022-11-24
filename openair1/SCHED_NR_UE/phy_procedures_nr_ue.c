@@ -827,6 +827,7 @@ bool nr_ue_dlsch_procedures(PHY_VARS_NR_UE *ue,
         break;
       case PDSCH:
         nr_fill_dl_indication(&dl_indication, NULL, rx_ind, proc, ue, gNB_id, NULL);
+        LOG_D(PHY,"[yjn]:(nr_ue_dlsch_procedures)dlsch->harq_processes[dlsch->current_harq_pid%d]->ack = %d\n",dlsch0->current_harq_pid,dlsch0->harq_processes[dlsch0->current_harq_pid]->ack);//add_yjn_harq
         nr_fill_rx_indication(rx_ind, FAPI_NR_RX_PDU_TYPE_DLSCH, gNB_id, ue, dlsch0, NULL, number_pdus, proc, NULL);
         break;
       case SI_PDSCH:

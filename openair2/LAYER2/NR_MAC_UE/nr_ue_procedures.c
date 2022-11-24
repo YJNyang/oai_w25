@@ -618,6 +618,8 @@ int nr_ue_process_dci_indication_pdu(module_id_t module_id,int cc_id, int gNB_in
   LOG_D(MAC,"Received dci indication (rnti %x,dci format %d,n_CCE %d,payloadSize %d,payload %llx)\n",
 	dci->rnti,dci->dci_format,dci->n_CCE,dci->payloadSize,*(unsigned long long*)dci->payloadBits);
   int8_t ret = nr_extract_dci_info(mac, dci->dci_format, dci->payloadSize, dci->rnti, (uint64_t *)dci->payloadBits, def_dci_pdu_rel15);
+  int rnti_type = get_rnti_type(mac, dci->rnti);//add_yjn_harq
+  LOG_D(PHY,"[yjn]:after(nr_extract_dci_info)def_dci_pdu_rel15->harq_pid = %d,rnti_type = %d\n",def_dci_pdu_rel15->harq_pid,rnti_type);//add_yjn_harq
   if ((ret&1) == 1) return -1;
   else if (ret == 2) {
     dci->dci_format = NR_UL_DCI_FORMAT_0_0;
@@ -970,7 +972,7 @@ int8_t nr_ue_process_dci(module_id_t module_id, int cc_id, uint8_t gNB_index, fr
     /* RV (only if CRC scrambled by C-RNTI or CS-RNTI or new-RNTI or TC-RNTI)*/
     dlsch_config_pdu_1_0->rv = dci->rv;
     /* HARQ_PROCESS_NUMBER (only if CRC scrambled by C-RNTI or CS-RNTI or new-RNTI or TC-RNTI)*/
-    dlsch_config_pdu_1_0->harq_process_nbr = dci->harq_pid;
+    dlsch_config_pdu_1_0->harq_process_nbr = dci->harq_pid; 
     /* TB_SCALING (only if CRC scrambled by P-RNTI or RA-RNTI) */
     // according to TS 38.214 Table 5.1.3.2-3
     if (dci->tb_scaling == 0) dlsch_config_pdu_1_0->scaling_factor_S = 1;
@@ -2165,8 +2167,8 @@ uint8_t get_downlink_ack(NR_UE_MAC_INST_t *mac,
   /* look for dl acknowledgment which should be done on current uplink slot */
   for (int code_word = 0; code_word < number_of_code_word; code_word++) {
 
-    for (int dl_harq_pid = 0; dl_harq_pid < 16; dl_harq_pid++) {
-
+    // for (int dl_harq_pid = 0; dl_harq_pid < 16; dl_harq_pid++) {
+    for (int dl_harq_pid = 0; dl_harq_pid < 64; dl_harq_pid++) { //add_yjn_harq
       current_harq = &mac->dl_harq_info[dl_harq_pid];
 
       if (current_harq->active) {
@@ -2894,7 +2896,11 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
 	  
 	// HARQ process number  4bit
 	pos+=4;
-	dci_pdu_rel15->harq_pid  = (*dci_pdu>>(dci_size-pos))&0xf;
+  // static int i = 2;//add_yjn_harq
+  // dci_pdu_rel15->harq_pid  = i;
+  // i = (i + 1)%64;
+  dci_pdu_rel15->harq_pid  = (*dci_pdu>>(dci_size-pos))&0xf;
+  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
 #ifdef DEBUG_EXTRACT_DCI
 	LOG_D(MAC,"HARQ_PID %d (%d bits)=> %d (0x%lx)\n",dci_pdu_rel15->harq_pid,4,dci_size-pos,*dci_pdu);
 #endif
@@ -3134,7 +3140,11 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
 #endif
 	// HARQ process number  4bit
 	pos+=4;
+  // static int j = 0;//add_yjn_harq
+  // dci_pdu_rel15->harq_pid  = j;
+  // j = (j + 1)%64;
 	dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
+  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
 #ifdef DEBUG_EXTRACT_DCI
 	LOG_D(MAC,"HARQ_PID %d (%d bits)=> %d (0x%lx)\n",dci_pdu_rel15->harq_pid,4,dci_size-pos,*dci_pdu);
 #endif
@@ -3268,7 +3278,11 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
         dci_pdu_rel15->rv2.val = (*dci_pdu>>(dci_size-pos))&((1<<dci_pdu_rel15->rv2.nbits)-1);
         // HARQ process number  4bit
         pos+=4;
-        dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
+        static int m = 1;//add_yjn_harq
+        dci_pdu_rel15->harq_pid  = m;
+        m = (m + 1)%64;
+        // dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
+        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
         // Downlink assignment index
         pos+=dci_pdu_rel15->dai[0].nbits;
         dci_pdu_rel15->dai[0].val = (*dci_pdu>>(dci_size-pos))&((1<<dci_pdu_rel15->dai[0].nbits)-1);
@@ -3353,7 +3367,11 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
 
         // HARQ process number  4bit
         pos+=4;
-        dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
+        static int n = 2;//add_yjn_harq
+        dci_pdu_rel15->harq_pid  = n;
+        n = (n + 1)%64;
+        // dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
+        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
 
         // 1st Downlink assignment index
         pos+=dci_pdu_rel15->dai[0].nbits;

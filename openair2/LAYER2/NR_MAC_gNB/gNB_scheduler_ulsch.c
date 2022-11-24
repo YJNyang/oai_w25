@@ -38,7 +38,7 @@
 #include "LAYER2/NR_MAC_COMMON/nr_mac_extern.h"
 //extern uint16_t sl_ahead;
 extern int num_delay;//add_yjn
-int get_future_ul_tti_req_ind(frame_t frame, sub_frame_t slot);//add_yjn
+int get_future_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slot);//add_yjn
 extern void process_CellGroup(NR_CellGroupConfig_t *CellGroup, NR_UE_sched_ctrl_t *sched_ctrl);
 
 int get_dci_format(NR_UE_sched_ctrl_t *sched_ctrl) {
@@ -424,8 +424,10 @@ void handle_nr_ul_harq(const int CC_idP,
                        module_id_t mod_id,
                        frame_t frame,
                        sub_frame_t slot,
-                       const nfapi_nr_crc_t *crc_pdu)
+                      //  const nfapi_nr_crc_t *crc_pdu)
+                      nfapi_nr_crc_t *crc_pdu)//add_yjn_harq
 {
+  crc_pdu->tb_crc_status = 0;//add_yjn_harq
   NR_UE_info_t* UE = find_nr_UE(&RC.nrmac[mod_id]->UE_info, crc_pdu->rnti);
   if (!UE) {
     LOG_W(NR_MAC, "handle harq for rnti %04x, in RA process\n", crc_pdu->rnti);
@@ -456,8 +458,8 @@ void handle_nr_ul_harq(const int CC_idP,
     if(sched_ctrl->ul_harq_processes[harq_pid].round >= RC.nrmac[mod_id]->harq_round_max - 1) {
       abort_nr_ul_harq(UE, harq_pid);
     } else {
-      sched_ctrl->ul_harq_processes[harq_pid].round++;
-      add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
+      // sched_ctrl->ul_harq_processes[harq_pid].round++;
+      // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);//add_yjn_harq
     }
     harq_pid = sched_ctrl->feedback_ul_harq.head;
   }
@@ -481,12 +483,12 @@ void handle_nr_ul_harq(const int CC_idP,
           crc_pdu->rnti,
           harq_pid);
   } else {
-    harq->round++;
+    // harq->round++;
     LOG_D(NR_MAC,
           "Ulharq id %d crc failed for RNTI %04x\n",
           harq_pid,
           crc_pdu->rnti);
-    add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
+    // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);//add_yjn_harq
   }
 }
 
@@ -505,9 +507,9 @@ void nr_rx_sdu(const module_id_t gnb_mod_idP,
                const uint16_t rssi){
 
   gNB_MAC_INST *gNB_mac = RC.nrmac[gnb_mod_idP];
-  NR_COMMON_channels_t *cc = gNB_mac->common_channels;  //add_yjn
-  NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon; //add_yjn
-  const int mu = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing; //add_yjn
+  // NR_COMMON_channels_t *cc = gNB_mac->common_channels;  //add_yjn
+  // NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon; //add_yjn
+  // const int mu = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing; //add_yjn
   const int current_rnti = rntiP;
   LOG_D(NR_MAC, "rx_sdu for rnti %04x\n", current_rnti);
   const int target_snrx10 = gNB_mac->pusch_target_snrx10;
@@ -703,7 +705,6 @@ void nr_rx_sdu(const module_id_t gnb_mod_idP,
           if (nr_process_mac_pdu(gnb_mod_idP, UE, CC_idP, frameP, slotP, sduP, sdu_lenP) == 0) {
             ra->state = Msg4;
             ra->Msg4_frame = (frameP + 2) % 1024; 
-            //ra->Msg4_frame = (frameP + (gNB_mac->if_inst->sl_ahead + num_delay)/nr_slots_per_frame[mu] + 1) % 1024; //add_yjn   ra->Msg4_frame = (frameP + 2) % 1024;
             ra->Msg4_slot = 1;
             
             if (ra->msg3_dcch_dtch) {
@@ -975,8 +976,8 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
   /* frame/slot in sched_pusch has been set previously. In the following, we
    * overwrite the information in the retransmission information before storing
    * as the new scheduling instruction */
-  retInfo->frame = sched_ctrl->sched_pusch.frame;  //add_yjn_test
-  retInfo->slot = sched_ctrl->sched_pusch.slot; //add_yjn_test
+  retInfo->frame = sched_ctrl->sched_pusch.frame;  //debug_yjn
+  retInfo->slot = sched_ctrl->sched_pusch.slot; //debug_yjn
   /* Get previous PSUCH field info */
   sched_ctrl->sched_pusch = *retInfo;
   NR_sched_pusch_t *sched_pusch = &sched_ctrl->sched_pusch;
@@ -1413,7 +1414,8 @@ bool nr_fr1_ulsch_preprocessor(module_id_t module_id, frame_t frame, sub_frame_t
   /* Change vrb_map_UL to rballoc_mask: check which symbols per RB (in
    * vrb_map_UL) overlap with the "default" tda and exclude those RBs.
    * Calculate largest contiguous RBs */
-  int future_ind = get_future_ul_tti_req_ind(sched_frame, sched_slot);//add_yjn
+  int future_ind = get_future_ul_tti_req_ind(nr_mac, sched_frame, sched_slot);//add_yjn
+  // LOG_I(NR_MAC,"[yjn]the vrb_map_UL slot of ulsch is future_ind(%d)\n",future_ind);//debug_yjn
   uint16_t *vrb_map_UL =
       &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[future_ind * MAX_BWP_SIZE];//add_yjn   &RC.nrmac[module_id]->common_channels[CC_id].vrb_map_UL[sched_slot * MAX_BWP_SIZE];
   // uint16_t *vrb_map_UL =
@@ -1529,6 +1531,7 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
 
 
   NR_ServingCellConfigCommon_t *scc = RC.nrmac[module_id]->common_channels[0].ServingCellConfigCommon;
+  const int num_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing]; //add_yjn
   NR_UEs_t *UE_info = &RC.nrmac[module_id]->UE_info;
   const NR_SIB1_t *sib1 = RC.nrmac[module_id]->common_channels[0].sib1 ? RC.nrmac[module_id]->common_channels[0].sib1->message.choice.c1->choice.systemInformationBlockType1 : NULL;
   UE_iterator( UE_info->list, UE) {
@@ -1579,9 +1582,8 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
     add_tail_nr_list(&sched_ctrl->feedback_ul_harq, harq_id);
     LOG_D(NR_MAC,"[yjn]: in nr_schedule_ulsch, add_tail_nr_list(feedback_ul_harq, harq_id),frame = %d,slot = %d,harq_id = %d\n",frame,slot,harq_id); //debug_yjn
     // cur_harq->feedback_slot = sched_pusch->slot;
-    int fd_slot = get_future_ul_tti_req_ind(sched_pusch->frame,  sched_pusch->slot);//add_yjn
+    int fd_slot = get_future_ul_tti_req_ind(nr_mac, sched_pusch->frame,  sched_pusch->slot);//add_yjn
     cur_harq->feedback_slot = fd_slot;//add_yjn    
-    // cur_harq->feedback_slot = (sched_pusch->slot+ num_delay)%20;//add_yjn    test__
     cur_harq->is_waiting = true;
 
     int rnti_types[2] = { NR_RNTI_C, 0 };
@@ -1646,12 +1648,10 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
           sched_ctrl->tpc0);
 
     /* PUSCH in a later slot, but corresponding DCI now! */
-   
-    frame_t pusch_frame = (sched_pusch->slot + num_delay) >=20?  (sched_pusch->frame + 1)%1024 : sched_pusch->frame;//add_yjn_test
-    sub_frame_t pusch_slot = (sched_pusch->slot+ num_delay)%20;//add_yjn_test
-    //sched_pusch->frame = (sched_pusch->frame + 1)%1024; //add_yjn
+    frame_t pusch_frame = (sched_pusch->frame + (sched_pusch->slot + num_delay)/num_slots)%1024;//add_yjn_test
+    sub_frame_t pusch_slot = (sched_pusch->slot + num_delay) % num_slots;//add_yjn_test
     LOG_D(NR_MAC,"[yjn]: in nr_schedule_ulsch, sched_pusch->frame = %d,sched_pusch->slot=%d,harq_id = %d,pusch_frame = %d,pusch_slot = %d\n",sched_pusch->frame,sched_pusch->slot,harq_id,pusch_frame,pusch_slot);
-    int future_index = get_future_ul_tti_req_ind(pusch_frame,  pusch_slot);//add_yjn
+    int future_index = get_future_ul_tti_req_ind(nr_mac, pusch_frame,  pusch_slot);//add_yjn
     nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][future_index]; //add_yjn   nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][sched_pusch->slot];
     // nfapi_nr_ul_tti_request_t *future_ul_tti_req = &RC.nrmac[module_id]->UL_tti_req_ahead[0][sched_pusch->slot];
     AssertFatal(future_ul_tti_req->SFN == pusch_frame   //add_yjn
@@ -1660,8 +1660,8 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
                 frame, slot,
                 future_ul_tti_req->SFN,
                 future_ul_tti_req->Slot,
-                sched_pusch->frame,
-                sched_pusch->slot);
+                pusch_frame,
+                pusch_slot);
     AssertFatal(future_ul_tti_req->n_pdus <
                 sizeof(future_ul_tti_req->pdus_list) / sizeof(future_ul_tti_req->pdus_list[0]),
                 "Invalid future_ul_tti_req->n_pdus %d\n", future_ul_tti_req->n_pdus);

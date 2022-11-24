@@ -83,7 +83,9 @@
 #define NR_MAX_NB_LAYERS 4 // 8
 #define NR_MAX_NB_PORTS 32
 
-#define NR_MAX_NB_HARQ_PROCESSES 16
+// #define NR_MAX_NB_HARQ_PROCESSES 16  //add_yjn
+#define NR_MAX_NB_HARQ_PROCESSES 64  //add_yjn_harq
+
 
 #define NR_MAX_PDSCH_TBS 3824
 #define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1 - The physical layer imposes a limit to the maximum size a SIB can take. The maximum SIB1 or SI message size is 2976 bits.

@@ -54,7 +54,7 @@
 //#define DEBUG_DFT_IDFT
 
 //extern int32_t uplink_counter;
-
+extern int num_delay;//add_yjn
 void nr_pusch_codeword_scrambling_uci(uint8_t *in,
                                       uint32_t size,
                                       uint32_t Nid,
@@ -220,7 +220,9 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     nr_init_pusch_dmrs(UE, pusch_pdu->scid, pusch_pdu->ul_dmrs_scrambling_id);
   }
 
-  uint32_t ***pusch_dmrs = UE->nr_gold_pusch_dmrs[slot];
+  uint8_t dmrs_num_delay = (slot + num_delay)%20; //add_yjn  
+  LOG_D(PHY,"dmrs_num_delay = %d\n",dmrs_num_delay);//add_yjn
+  uint32_t ***pusch_dmrs = UE->nr_gold_pusch_dmrs[dmrs_num_delay]; //add_yjn
   uint16_t n_dmrs = (pusch_pdu->bwp_start + start_rb + nb_rb)*((dmrs_type == pusch_dmrs_type1) ? 6:4);
   int16_t mod_dmrs[n_dmrs<<1] __attribute((aligned(16)));
 
