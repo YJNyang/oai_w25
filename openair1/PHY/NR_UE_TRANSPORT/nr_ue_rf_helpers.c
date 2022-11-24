@@ -77,6 +77,44 @@ void nr_rf_card_config_gain(openair0_config_t *openair0_cfg,
   }
 }
 
+void nr_rf_card_config_freq_doppler(openair0_config_t *openair0_cfg,
+                            uint64_t ul_carrier,
+                            uint64_t dl_carrier,
+                            int freq_offset){
+
+  uint8_t mod_id     = 0;
+  uint8_t cc_id      = 0;
+  PHY_VARS_NR_UE *ue = PHY_vars_UE_g[mod_id][cc_id];
+  int rf_chain       = ue->rf_map.chain;
+  double dl_freq_scale  = (double)(dl_carrier + freq_offset) / dl_carrier;
+  double ul_freq_scale  = (double)(ul_carrier - freq_offset) / ul_carrier;
+
+  for (int i = rf_chain; i < rf_chain + 4; i++) {
+
+    if (i < openair0_cfg->rx_num_channels)
+      openair0_cfg->rx_freq[i + rf_chain] = dl_carrier * dl_freq_scale;
+    else
+      openair0_cfg->rx_freq[i] = 0.0;
+
+    if (i<openair0_cfg->tx_num_channels)
+      openair0_cfg->tx_freq[i] = ul_carrier * ul_freq_scale;
+    else
+      openair0_cfg->tx_freq[i] = 0.0;
+
+    openair0_cfg->autocal[i] = 1;
+
+    if (i < openair0_cfg->rx_num_channels) {
+      LOG_I(PHY, "HW: Configuring channel %d (rf_chain %d): setting tx_freq %.0f Hz, rx_freq %.0f Hz, tune_offset %.0f\n",
+        i,
+        rf_chain,
+        openair0_cfg->tx_freq[i],
+        openair0_cfg->rx_freq[i],
+        openair0_cfg->tune_offset);
+    }
+
+  }
+}
+
 void nr_rf_card_config_freq(openair0_config_t *openair0_cfg,
                             uint64_t ul_carrier,
                             uint64_t dl_carrier,

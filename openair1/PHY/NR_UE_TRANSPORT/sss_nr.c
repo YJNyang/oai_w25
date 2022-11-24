@@ -572,7 +572,7 @@ int rx_sss_nr(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc, int32_t *tot_metric, 
     re += d[i]*sss[2*i];
     im += d[i]*sss[2*i+1];
   }
-  double ffo_sss = atan2(im,re)/M_PI/4.3;
+  double ffo_sss = -atan2(im,re)/M_PI/4.3;
   *freq_offset_sss = (int)(ffo_sss*frame_parms->subcarrier_spacing);
 
   double ffo_pss = ((double)ue->common_vars.freq_offset)/frame_parms->subcarrier_spacing;

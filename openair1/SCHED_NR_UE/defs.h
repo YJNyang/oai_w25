@@ -123,6 +123,17 @@ void phy_procedures_nrUE_TX(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc, uint8_t
   @param phy_pdcch_config       PDCCH Config for this slot
   @param txFifo                 Result fifo if PDSCH is run in parallel
 */
+
+//+++++++++++++++++++add_yjn++++++++++++++++++
+typedef struct{
+  PHY_VARS_NR_UE *ue;
+  UE_nr_rxtx_proc_t *proc;
+  uint8_t gNB_id;
+  NR_UE_PDCCH_CONFIG *phy_pdcch_config;
+}args_group_t;
+
+void UE_TrackSync_thread(void*arg);
+
 int phy_procedures_nrUE_RX(PHY_VARS_NR_UE *ue,
                            UE_nr_rxtx_proc_t *proc,
                            uint8_t gNB_id,

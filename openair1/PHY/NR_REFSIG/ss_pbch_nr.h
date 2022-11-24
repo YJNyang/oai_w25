@@ -43,6 +43,7 @@
 #define  NUMBER_PSS_SEQUENCE          (3)
 #define  INVALID_PSS_SEQUENCE         (NUMBER_PSS_SEQUENCE)
 #define  LENGTH_PSS_NR                (127)
+#define  NUMBER_DPSS_SEQUENCE          (8)
 #define  N_SC_RB                      (12)     /* Resource block size in frequency domain expressed as a number if subcarriers */
 #define  SCALING_PSS_NR               (3)
 #define  SCALING_CE_PSS_NR            (13)     /* scaling channel estimation based on ps */

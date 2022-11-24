@@ -519,6 +519,7 @@ NR_UE_RRC_INST_t* openair_rrc_top_init_ue_nr(char* uecap_file, char* rrc_config_
   }
   else{
     NR_UE_rrc_inst = NULL;
+    printf("RRC这里执行？");
   }
 
   return NR_UE_rrc_inst;
