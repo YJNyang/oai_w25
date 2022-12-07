@@ -1911,7 +1911,8 @@ void UE_TrackSync_thread(void*arg)
 {
   nr_rxtx_thread_data_t *syncD=(nr_rxtx_thread_data_t *) arg;
   PHY_VARS_NR_UE *UE = syncD->UE;
-  int WinLen = (UE->SYNC_mode[0]==WAIT_SYNC)?UE->frame_parms.ofdm_symbol_size<<1 : UE->max_delay_offset <<5;
+  // int WinLen = (UE->SYNC_mode[0]==WAIT_SYNC)?UE->frame_parms.ofdm_symbol_size<<1 : UE->max_delay_offset <<5;
+  int WinLen = UE->frame_parms.ofdm_symbol_size >> 1;
   int TrackPosition = UE->sync_pos_frame+UE->frame_parms.nb_prefix_samples; // sync pss position
   int  sync_offset;
   static int count_max_pos_ok = 0;
