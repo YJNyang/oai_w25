@@ -483,12 +483,13 @@ int rrc_mac_config_req_gNB(module_id_t Mod_idP,
     
     const int n = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];//add_yjn
 
-    int num_slots = 40;
-    if (num_delay <= 20)  num_slots = n + 20;     //  if 30khz, 40 slot
-    else if (num_delay<=60) num_slots = n + 60;     //  if 30khz, 80 slot
-    else if (num_delay<=140) num_slots = n + 140;     //  if 30khz, 160 slot
-    else if (num_delay<=300) num_slots = n + 300;     //  if 30khz, 320 slot
-    else  LOG_E(NR_MAC,"RTT-slot only support <= 300\n");
+    int num_slots = 20;
+    if (num_delay <= 10)  num_slots = n + 10;     //  if 30khz, 40 slot
+    else if (num_delay<=30) num_slots = n + 30;     //  if 30khz, 80 slot
+    else if (num_delay<=70) num_slots = n + 70;     //  if 30khz, 160 slot
+    else if (num_delay<=150) num_slots = n + 150;     //  if 30khz, 320 slot
+    else if (num_delay<=310) num_slots = n + 310;     //  if 30khz, 320 slot
+    else  LOG_E(NR_MAC,"RTT-slot only support <= 310\n");
 
     RC.nrmac[Mod_idP]->common_channels[0].vrb_map_UL =
         calloc((num_slots) * MAX_BWP_SIZE, sizeof(uint16_t));//add_yjn

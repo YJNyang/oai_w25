@@ -2462,11 +2462,17 @@ NR_UE_info_t *add_new_nr_ue(gNB_MAC_INST *nr_mac, rnti_t rntiP, NR_CellGroupConf
     // create_nr_list(&sched_ctrl->feedback_ul_harq, 16);
     // create_nr_list(&sched_ctrl->retrans_ul_harq, 16);
 
-    create_nr_list(&sched_ctrl->available_ul_harq, 64); //add_yjn_harq
-    for (int harq = 0; harq < 64; harq++)
+    // create_nr_list(&sched_ctrl->available_ul_harq, 64); //add_yjn_harq
+    // for (int harq = 0; harq < 64; harq++)
+    //   add_tail_nr_list(&sched_ctrl->available_ul_harq, harq);
+    // create_nr_list(&sched_ctrl->feedback_ul_harq, 64);
+    // create_nr_list(&sched_ctrl->retrans_ul_harq, 64);
+
+    create_nr_list(&sched_ctrl->available_ul_harq, 255); //add_yjn_harq
+    for (int harq = 0; harq < 255; harq++)
       add_tail_nr_list(&sched_ctrl->available_ul_harq, harq);
-    create_nr_list(&sched_ctrl->feedback_ul_harq, 64);
-    create_nr_list(&sched_ctrl->retrans_ul_harq, 64);
+    create_nr_list(&sched_ctrl->feedback_ul_harq, 255);
+    create_nr_list(&sched_ctrl->retrans_ul_harq, 255);
 
   pthread_mutex_lock(&UE_info->mutex);
   int i;
@@ -2552,8 +2558,8 @@ void reset_ul_harq_list(NR_UE_sched_ctrl_t *sched_ctrl) {
     add_tail_nr_list(&sched_ctrl->available_ul_harq, harq);
   }
 
-  for (int i = 0; i < NR_MAX_NB_HARQ_PROCESSES; i++) {
-    // for (int i = 0; i < 16; i++) { //add_yjn_harq
+  // for (int i = 0; i < NR_MAX_NB_HARQ_PROCESSES; i++) {
+    for (int i = 0; i < 255; i++) { //add_yjn_harq
     sched_ctrl->ul_harq_processes[i].feedback_slot = -1;
     sched_ctrl->ul_harq_processes[i].round = 0;
     sched_ctrl->ul_harq_processes[i].is_waiting = false;

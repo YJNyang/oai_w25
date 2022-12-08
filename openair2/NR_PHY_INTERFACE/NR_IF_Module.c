@@ -182,8 +182,7 @@ void handle_nr_ulsch(NR_UL_IND_t *UL_info)
                 UL_info->rx_ind.number_of_pdus, UL_info->crc_ind.number_crcs);
     for (int i = 0; i < UL_info->rx_ind.number_of_pdus; i++) {
       const nfapi_nr_rx_data_pdu_t *rx = &UL_info->rx_ind.pdu_list[i];
-      // const nfapi_nr_crc_t *crc = &UL_info->crc_ind.crc_list[i];
-      nfapi_nr_crc_t *crc = &UL_info->crc_ind.crc_list[i];//add_yjn_harq
+      const nfapi_nr_crc_t *crc = &UL_info->crc_ind.crc_list[i];
       LOG_D(NR_PHY, "UL_info->crc_ind.pdu_list[%d].rnti:%04x "
                     "UL_info->rx_ind.pdu_list[%d].rnti:%04x\n",
                     i, crc->rnti, i, rx->rnti);

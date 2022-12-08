@@ -14,7 +14,7 @@
 #        define NUMBER_OF_NR_ULSCH_MAX 8
 // #        define NUMBER_OF_NR_ULSCH_MAX 16     //add_yjn_harq
 #        define NUMBER_OF_NR_DLSCH_MAX 8
-// #        define NUMBER_OF_NR_DLSCH_MAX 16      //add_yjn_harq
+// #        define NUMBER_OF_NR_DLSCH_MAX 16      
 #        define NUMBER_OF_NR_UCI_MAX 16
 #        define NUMBER_OF_NR_SRS_MAX 16
 #        define NUMBER_OF_NR_CSIRS_MAX 16

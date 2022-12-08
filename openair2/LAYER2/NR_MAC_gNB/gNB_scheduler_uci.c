@@ -846,8 +846,10 @@ static void handle_dl_harq(NR_UE_info_t * UE,
   } else {
     LOG_I(PHY,"NACK for: pid %d, ue %04x\n",harq_pid, UE->rnti);
     add_tail_nr_list(&UE->UE_sched_ctrl.available_dl_harq, harq_pid);//add_yjn_harq
+    harq->round = 0;
+    harq->ndi ^= 1;
     // add_tail_nr_list(&UE->UE_sched_ctrl.retrans_dl_harq, harq_pid);
-    // harq->round++;//add_yjn_harq
+    // harq->round++;
   }
 }
 
@@ -1420,7 +1422,8 @@ static NR_UE_harq_t *find_harq(frame_t frame, sub_frame_t slot, NR_UE_info_t * U
    * Similarly, we might be "in advance", in which case we need to skip
    * this result. */
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
-  int8_t pid = sched_ctrl->feedback_dl_harq.head;
+  // int8_t pid = sched_ctrl->feedback_dl_harq.head;
+  int pid = sched_ctrl->feedback_dl_harq.head;//add_yjn_harq
   if (pid < 0)
     return NULL;
   NR_UE_harq_t *harq = &sched_ctrl->harq_processes[pid];
@@ -1466,22 +1469,68 @@ void handle_nr_uci_pucch_0_1(module_id_t mod_id,
     return;
   }
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+  
+  //=======================for RA procedure===========================//
+  int flag = 0;    
+  for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {//add_yjn_harq
+    NR_COMMON_channels_t *cc = &RC.nrmac[mod_id]->common_channels[CC_id];
+    for (int i = 0; i < NR_NB_RA_PROC_MAX; i++) {
+      NR_RA_t *ra = &cc->ra[i];
+      LOG_D(NR_MAC, "RA[state:%d]\n", ra->state);
+      switch (ra->state) {
+        case WAIT_Msg4_ACK:      
+          if (((uci_01->pduBitmap >> 1) & 0x01)) {
+            LOG_I(NR_MAC,"[yjn]:======================handle_nr_uci_pucch_0_1 for RA procedure\n");
+            // iterate over received harq bits
+            for (int harq_bit = 0; harq_bit < uci_01->harq->num_harq; harq_bit++) {
+              const uint8_t harq_value = uci_01->harq->harq_list[harq_bit].harq_value;
+              const uint8_t harq_confidence = uci_01->harq->harq_confidence_level;
+              NR_UE_harq_t *harq = find_harq(frame, slot, UE, RC.nrmac[mod_id]->harq_round_max);
+              if (!harq) {
+                LOG_E(NR_MAC, "Oh no! Could not find a harq in %s!\n", __FUNCTION__);
+                break;
+              }
+              DevAssert(harq->is_waiting);
+              // const int8_t pid = sched_ctrl->feedback_dl_harq.head;
+              const int pid = sched_ctrl->feedback_dl_harq.head;//add_yjn_harq
+              remove_front_nr_list(&sched_ctrl->feedback_dl_harq);
+              LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit,pid,harq_value);
+              handle_dl_harq(UE, pid, harq_value == 0 && harq_confidence == 0, RC.nrmac[mod_id]->harq_round_max);
+              if (harq_confidence == 1)  UE->mac_stats.pucch0_DTX++;
+            }
+          }
 
+          // check scheduling request result, confidence_level == 0 is good
+          if (uci_01->pduBitmap & 0x1 && uci_01->sr->sr_indication && uci_01->sr->sr_confidence_level == 0 && uci_01->ul_cqi >= 148) {
+            // SR detected with SNR >= 10dB
+            sched_ctrl->SR |= true;
+            LOG_D(NR_MAC, "SR UE %04x ul_cqi %d\n", uci_01->rnti, uci_01->ul_cqi);
+          }
+
+          // tpc (power control) only if we received AckNack or positive SR. For a
+          // negative SR, the UE won't have sent anything, and the SNR is not valid
+          if (((uci_01->pduBitmap >> 1) & 0x1) ) {
+            if ((uci_01->harq) && (uci_01->harq->harq_confidence_level==0)) sched_ctrl->tpc1 = nr_get_tpc(RC.nrmac[mod_id]->pucch_target_snrx10, uci_01->ul_cqi, 30);
+            else                                        sched_ctrl->tpc1 = 3;
+            sched_ctrl->pucch_snrx10 = uci_01->ul_cqi * 5 - 640;
+          }
+          flag++;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  if (flag > 0) return;
+
+  //=======================for PDSCH procedure=======================//
   if (((uci_01->pduBitmap >> 1) & 0x01)) {
+    LOG_I(NR_MAC,"[yjn]:======================handle_nr_uci_pucch_0_1\n");
     // iterate over received harq bits
     for (int harq_bit = 0; harq_bit < uci_01->harq->num_harq; harq_bit++) {
       const uint8_t harq_value = uci_01->harq->harq_list[harq_bit].harq_value;
       const uint8_t harq_confidence = uci_01->harq->harq_confidence_level;
-      NR_UE_harq_t *harq = find_harq(frame, slot, UE, RC.nrmac[mod_id]->harq_round_max);
-      if (!harq) {
-        LOG_E(NR_MAC, "Oh no! Could not find a harq in %s!\n", __FUNCTION__);
-        break;
-      }
-      DevAssert(harq->is_waiting);
-      const int8_t pid = sched_ctrl->feedback_dl_harq.head;
-      remove_front_nr_list(&sched_ctrl->feedback_dl_harq);
-      LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit,pid,harq_value);
-      handle_dl_harq(UE, pid, harq_value == 0 && harq_confidence == 0, RC.nrmac[mod_id]->harq_round_max);
+      LOG_D(NR_MAC,"%4d.%2d bit %d ack/nack %d\n",frame, slot, harq_bit,harq_value);
       if (harq_confidence == 1)  UE->mac_stats.pucch0_DTX++;
     }
   }
@@ -1538,7 +1587,8 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id,
       if (!harq)
         break;
       DevAssert(harq->is_waiting);
-      const int8_t pid = sched_ctrl->feedback_dl_harq.head;
+      // const int8_t pid = sched_ctrl->feedback_dl_harq.head;
+      const int pid = sched_ctrl->feedback_dl_harq.head;//add_yjn_harq
       remove_front_nr_list(&sched_ctrl->feedback_dl_harq);
       handle_dl_harq(UE, pid, uci_234->harq.harq_crc != 1 && acknack, RC.nrmac[mod_id]->harq_round_max);
     }

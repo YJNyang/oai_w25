@@ -383,7 +383,8 @@ typedef struct NR_sched_pusch {
   uint32_t tb_size;
 
   /// UL HARQ PID to use for this UE, or -1 for "any new"
-  int8_t ul_harq_pid;
+  // int8_t ul_harq_pid;
+    int ul_harq_pid;//add_yjn_harq
 
   /// the Time Domain Allocation used for this transmission. Note that this is
   /// only important for retransmissions; otherwise, the TDA in
@@ -647,7 +648,7 @@ typedef struct {
   bool SR;
   bool set_pmi;
   /// information about every HARQ process
-  NR_UE_harq_t harq_processes[NR_MAX_NB_HARQ_PROCESSES];//add_yjn_harq
+  NR_UE_harq_t harq_processes[NR_MAX_NB_HARQ_PROCESSES];
   /// HARQ processes that are free
   NR_list_t available_dl_harq;
   /// HARQ processes that await feedback
@@ -655,8 +656,8 @@ typedef struct {
   /// HARQ processes that await retransmission
   NR_list_t retrans_dl_harq;
   /// information about every UL HARQ process
-  NR_UE_ul_harq_t ul_harq_processes[NR_MAX_NB_HARQ_PROCESSES];
-  // NR_UE_ul_harq_t ul_harq_processes[16];//add_yjn_harq
+  // NR_UE_ul_harq_t ul_harq_processes[NR_MAX_NB_HARQ_PROCESSES];
+  NR_UE_ul_harq_t ul_harq_processes[255];//add_yjn_harq
   /// UL HARQ processes that are free
   NR_list_t available_ul_harq;
   /// UL HARQ processes that await feedback

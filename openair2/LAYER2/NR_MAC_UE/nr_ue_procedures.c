@@ -179,7 +179,8 @@ void nr_ue_init_mac(module_id_t module_idP) {
 
     mac->scheduling_info.LCID_status[i] = LCID_EMPTY;
     mac->scheduling_info.LCID_buffer_remain[i] = 0;
-    for (int i=0;i<NR_MAX_HARQ_PROCESSES;i++) mac->first_ul_tx[i]=1;
+    // for (int i=0;i<NR_MAX_HARQ_PROCESSES;i++) mac->first_ul_tx[i]=1;//add_yjn_harq
+    for (int i=0;i<255;i++) mac->first_ul_tx[i]=1;
   }
 }
 
@@ -618,8 +619,8 @@ int nr_ue_process_dci_indication_pdu(module_id_t module_id,int cc_id, int gNB_in
   LOG_D(MAC,"Received dci indication (rnti %x,dci format %d,n_CCE %d,payloadSize %d,payload %llx)\n",
 	dci->rnti,dci->dci_format,dci->n_CCE,dci->payloadSize,*(unsigned long long*)dci->payloadBits);
   int8_t ret = nr_extract_dci_info(mac, dci->dci_format, dci->payloadSize, dci->rnti, (uint64_t *)dci->payloadBits, def_dci_pdu_rel15);
-  int rnti_type = get_rnti_type(mac, dci->rnti);//add_yjn_harq
-  LOG_D(PHY,"[yjn]:after(nr_extract_dci_info)def_dci_pdu_rel15->harq_pid = %d,rnti_type = %d\n",def_dci_pdu_rel15->harq_pid,rnti_type);//add_yjn_harq
+  int rnti_type = get_rnti_type(mac, dci->rnti);//add_yjn_debug_harq
+  LOG_D(PHY,"[yjn]:after(nr_extract_dci_info)def_dci_pdu_rel15->harq_pid = %d,rnti_type = %d\n",def_dci_pdu_rel15->harq_pid,rnti_type);//add_yjn_debug_harq
   if ((ret&1) == 1) return -1;
   else if (ret == 2) {
     dci->dci_format = NR_UL_DCI_FORMAT_0_0;
@@ -2896,11 +2897,8 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
 	  
 	// HARQ process number  4bit
 	pos+=4;
-  // static int i = 2;//add_yjn_harq
-  // dci_pdu_rel15->harq_pid  = i;
-  // i = (i + 1)%64;
   dci_pdu_rel15->harq_pid  = (*dci_pdu>>(dci_size-pos))&0xf;
-  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
+  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_debug_harq
 #ifdef DEBUG_EXTRACT_DCI
 	LOG_D(MAC,"HARQ_PID %d (%d bits)=> %d (0x%lx)\n",dci_pdu_rel15->harq_pid,4,dci_size-pos,*dci_pdu);
 #endif
@@ -3140,11 +3138,8 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
 #endif
 	// HARQ process number  4bit
 	pos+=4;
-  // static int j = 0;//add_yjn_harq
-  // dci_pdu_rel15->harq_pid  = j;
-  // j = (j + 1)%64;
 	dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
-  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
+  LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_0, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_debug_harq
 #ifdef DEBUG_EXTRACT_DCI
 	LOG_D(MAC,"HARQ_PID %d (%d bits)=> %d (0x%lx)\n",dci_pdu_rel15->harq_pid,4,dci_size-pos,*dci_pdu);
 #endif
@@ -3282,7 +3277,7 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
         dci_pdu_rel15->harq_pid  = m;
         m = (m + 1)%64;
         // dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
-        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
+        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_1_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_debug_harq
         // Downlink assignment index
         pos+=dci_pdu_rel15->dai[0].nbits;
         dci_pdu_rel15->dai[0].val = (*dci_pdu>>(dci_size-pos))&((1<<dci_pdu_rel15->dai[0].nbits)-1);
@@ -3369,9 +3364,9 @@ uint8_t nr_extract_dci_info(NR_UE_MAC_INST_t *mac,
         pos+=4;
         static int n = 2;//add_yjn_harq
         dci_pdu_rel15->harq_pid  = n;
-        n = (n + 1)%64;
+        n = (n + 1)%255;
         // dci_pdu_rel15->harq_pid = (*dci_pdu>>(dci_size-pos))&0xf;
-        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_harq
+        LOG_D( PHY,"[yjn]:(nr_extract_dci_info), dci_0_1, harq_pid = %d\n",dci_pdu_rel15->harq_pid);//add_yjn_debug_harq
 
         // 1st Downlink assignment index
         pos+=dci_pdu_rel15->dai[0].nbits;

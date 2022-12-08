@@ -137,6 +137,70 @@ typedef struct {
   poll_telnetcmdq_func_t poll_telnetcmdq;
 } rfsimulator_state_t;
 
+//add_yjn
+static void fre_offset_compensation_simd(int32_t* rxdata, int start, int end, double off_angle) {
+    int nb_samples_within_simd = 8;
+    float phase_re = (float)cos(nb_samples_within_simd * off_angle);
+    float phase_im = (float)sin(nb_samples_within_simd * off_angle);
+    __m256 base_phase_re = _mm256_set1_ps(phase_re);
+    __m256 base_phase_im = _mm256_set1_ps(phase_im);
+    __m256 real_phase_re = _mm256_setr_ps(cos(start * off_angle), cos((start + 1) * off_angle), cos((start + 2) * off_angle), cos((start + 3) * off_angle),
+        cos((start + 4) * off_angle), cos((start + 5) * off_angle), cos((start + 6) * off_angle), cos((start + 7) * off_angle));
+    __m256 real_phase_im = _mm256_setr_ps(sin(start * off_angle), sin((start + 1) * off_angle), sin((start + 2) * off_angle), sin((start + 3) * off_angle),
+        sin((start + 4) * off_angle), sin((start + 5) * off_angle), sin((start + 6) * off_angle), sin((start + 7) * off_angle));
+
+    __m256 real_phase_re_tem;
+    __m256 real_phase_im_tem;
+    for (int n = start; n < end; n += 8) {
+
+        __m256 rx_re = _mm256_setr_ps((float)((short*)rxdata)[2 * n], (float)(((short*)rxdata))[2 * n + 2],
+                                              (float)(((short*)rxdata))[2 * n + 4], (float)(((short*)rxdata))[2 * n + 6],
+                                              (float)(((short*)rxdata))[2 * n + 8], (float)(((short*)rxdata))[2 * n + 10],
+                                              (float)(((short*)rxdata))[2 * n + 12], (float)(((short*)rxdata))[2 * n + 14]);
+        __m256 rx_im = _mm256_setr_ps((float)(((short*)rxdata))[2 * n + 1], (float)(((short*)rxdata))[2 * n + 3],
+                                              (float)(((short*)rxdata))[2 * n + 5], (float)(((short*)rxdata))[2 * n + 7],
+                                              (float)(((short*)rxdata))[2 * n + 9], (float)(((short*)rxdata))[2 * n + 11],
+                                              (float)(((short*)rxdata))[2 * n + 13], (float)(((short*)rxdata))[2 * n + 15]);
+
+        __m256 data_re = _mm256_fmsub_ps(rx_re, real_phase_re, _mm256_mul_ps(rx_im, real_phase_im)); 
+        __m256 data_im = _mm256_fmadd_ps(rx_im, real_phase_re, _mm256_mul_ps(rx_re, real_phase_im)); 
+
+        __m256i data_re_int = _mm256_cvtps_epi32(data_re);
+        __m256i data_im_int = _mm256_cvtps_epi32(data_im);
+        __m256i data = _mm256_blend_epi16(data_re_int, _mm256_slli_epi32(data_im_int, 16), 0b10101010);
+        _mm256_store_si256((__m256i*)(rxdata+start) + (n - start) / 8, data);
+
+        real_phase_re_tem = real_phase_re;
+        real_phase_im_tem = real_phase_im;
+        real_phase_re = _mm256_fmsub_ps(real_phase_re_tem, base_phase_re, _mm256_mul_ps(real_phase_im_tem, base_phase_im));
+        real_phase_im = _mm256_fmadd_ps(real_phase_im_tem, base_phase_re, _mm256_mul_ps(real_phase_re_tem, base_phase_im));
+
+    }
+}
+
+static void cfo_compensation(int32_t* rxdata, int64_t start, int64_t end, double off_angle){
+  double re,im;
+  int BlockSize = end - start;
+  int alignedstart = 8-(start%8);
+  int alignedend = BlockSize-(end%8);
+  
+  for(int n=start; n<start+alignedstart; n++){
+    re = ((double)(((short *)rxdata))[2*n]);
+    im = ((double)(((short *)rxdata))[2*n+1]);
+    ((short *)rxdata)[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
+    ((short *)rxdata)[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
+  }
+
+  fre_offset_compensation_simd(rxdata,start+alignedstart,start+alignedend,off_angle);
+
+  for(int n=start+alignedend; n<start+BlockSize; n++){
+      re = ((double)(((short *)rxdata))[2*n]);
+      im = ((double)(((short *)rxdata))[2*n+1]);
+      ((short *)rxdata)[2*n] = (short)(round(re*cos(n*off_angle) - im*sin(n*off_angle)));
+      ((short *)rxdata)[2*n+1] = (short)(round(re*sin(n*off_angle) + im*cos(n*off_angle)));
+  } 
+  return;
+}
 
 static void allocCirBuf(rfsimulator_state_t *bridge, int sock) {
   buffer_t *ptr=&bridge->buf[sock];
@@ -440,6 +504,7 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t, openair0_timestamp
       sample_t tmpSamples[nsamps][nbAnt];
 
       for(int a=0; a<nbAnt; a++) {
+
         sample_t *in=(sample_t *)samplesVoid[a];
 
         for(int s=0; s<nsamps; s++)
@@ -696,6 +761,76 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
         t->poll_telnetcmdq(t->telnetcmd_qid,t);
 
       for (int a=0; a<nbAnt; a++) {//loop over number of Rx antennas
+	// add_yjn
+        int samples_per_subframe = 7680;
+        float s_time = 1 / (1.0e3 * samples_per_subframe);      // sampling time
+        static float freq_offset_dynamic = 0;                   //动态频偏 (-60k, 60k)
+        static float freq_offset_static = 0;                    //静态频偏 
+        static int flag = 0;                                    //1 The initial dynamic frequency offset increases; -1 the initial dynamic frequency offset decreases; 0 without dynamic frequency offset
+        int freq_offset_samples_step = samples_per_subframe;  //The sampling number of dynamic frequency offset changes; 0.35Hz per time slot, and the current change is in the unit of time slot.
+        float freq_offset_change_step = 0.35;                   
+        int32_t* tx_data =  (int32_t *)(&(ptr->circularBuf[0]));  //CirSize is the number of samples to the circularBuf
+        int64_t fre_offset_timestamp_start = 0;
+        int64_t fre_offset_timestamp_end = 0;
+        int i = 0;
+
+        for (i=0; i<(nsamps/freq_offset_samples_step); i++){
+          /*Determine whether the sampling point exceeds the buffer boundary*/
+          fre_offset_timestamp_start = (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) < CirSize)?  ((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) : ((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step)%CirSize;
+
+          if (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) < CirSize) //第一个点没越界，看第二个是否越界；
+            fre_offset_timestamp_end = (((t->nextRxTstamp)%CirSize + (i+1) * freq_offset_samples_step) < CirSize)? ((t->nextRxTstamp)%CirSize + (i+1) * freq_offset_samples_step) : CirSize;
+          else if (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) >= CirSize) 
+            fre_offset_timestamp_end = ((t->nextRxTstamp)%CirSize + (i+1) * freq_offset_samples_step)%CirSize;
+          
+          /*Set dynamic frequency offset growth according to flag*/
+          if (flag == 1){
+            freq_offset_dynamic = freq_offset_dynamic + freq_offset_change_step;
+            if(freq_offset_dynamic >= 59999.7) flag = -1;
+          }else if (flag == -1){
+            freq_offset_dynamic = freq_offset_dynamic - freq_offset_change_step;
+            if(freq_offset_dynamic <= -59999.7) flag = 1;
+          }else {
+            freq_offset_dynamic = 0;
+          }
+
+          float freq_offset = freq_offset_static + freq_offset_dynamic;
+          double off_angle = 2 * M_PI * s_time * (freq_offset);  // offset rotation angle compensation per sample
+          if(fre_offset_timestamp_end == CirSize){  //针对最后一个点越界，第一个点每越界
+            cfo_compensation(tx_data, fre_offset_timestamp_start, CirSize, off_angle);
+            cfo_compensation(tx_data, 0, ((t->nextRxTstamp)%CirSize + (i+1) * freq_offset_samples_step)%CirSize, off_angle);
+          }else{
+            cfo_compensation(tx_data, fre_offset_timestamp_start, fre_offset_timestamp_end, off_angle);//针对都越界或都没越界
+          } 
+        }
+
+        /* The number of sampling points less than one time slot is the frequency offset of the previous time slot */
+        if(nsamps-i*freq_offset_samples_step){
+          fre_offset_timestamp_start = (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) < CirSize)?  ((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) : ((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step)%CirSize;
+
+          if (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) < CirSize) 
+            fre_offset_timestamp_end = (((t->nextRxTstamp)%CirSize + nsamps) < CirSize)? ((t->nextRxTstamp)%CirSize + nsamps) : CirSize;
+          else if (((t->nextRxTstamp)%CirSize + i * freq_offset_samples_step) >= CirSize) 
+            fre_offset_timestamp_end = ((t->nextRxTstamp)%CirSize + nsamps)%CirSize;
+
+          if(nsamps-i*freq_offset_samples_step > 20700)
+          {
+            if (flag == 1) freq_offset_dynamic += 0.35;
+            else if (flag == -1) freq_offset_dynamic -= 0.35;
+              static int32_t count_unint = 0;
+              count_unint++;
+          }
+
+          float freq_offset = freq_offset_static + freq_offset_dynamic;
+          double off_angle = 2 * M_PI * s_time * (freq_offset);  // offset rotation angle compensation per sample
+          if(fre_offset_timestamp_end == CirSize){
+            cfo_compensation(tx_data, fre_offset_timestamp_start, CirSize, off_angle);
+            cfo_compensation(tx_data, 0, ((t->nextRxTstamp)%CirSize + nsamps)%CirSize, off_angle);
+          }else{
+            cfo_compensation(tx_data, fre_offset_timestamp_start, fre_offset_timestamp_end, off_angle);//针对都越界或都没越界
+          } 
+        }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         if ( ptr->channel_model != NULL ) { // apply a channel model
           rxAddInput(ptr->circularBuf, (c16_t *) samplesVoid[a],
                      a,

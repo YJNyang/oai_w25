@@ -57,7 +57,7 @@
 #include <executables/softmodem-common.h>
 
 #include "LAYER2/NR_MAC_COMMON/nr_mac_extern.h"
-
+extern int num_delay;//add_yjn
 //#define SRS_DEBUG
 static prach_association_pattern_t prach_assoc_pattern;
 static ssb_list_info_t ssb_list;
@@ -2628,7 +2628,7 @@ void nr_ue_prach_scheduler(module_id_t module_idP, frame_t frameP, sub_frame_t s
   else           setup = scc_SIB->uplinkConfigCommon->initialUplinkBWP.rach_ConfigCommon->choice.setup;
   NR_RACH_ConfigGeneric_t *rach_ConfigGeneric = &setup->rach_ConfigGeneric;
 
-  ra->RA_offset = 2; // to compensate the rx frame offset at the gNB
+  ra->RA_offset = 2 + num_delay / 10; // to compensate the rx frame offset at the gNB//add_yjn
   ra->generate_nr_prach = GENERATE_IDLE; // Reset flag for PRACH generation
   NR_TDD_UL_DL_ConfigCommon_t *tdd_config = scc==NULL ? scc_SIB->tdd_UL_DL_ConfigurationCommon : scc->tdd_UL_DL_ConfigurationCommon;
 

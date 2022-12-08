@@ -92,7 +92,7 @@ void nr_generate_pucch0(PHY_VARS_NR_UE *ue,
   
   LOG_D(PHY,"pucch0: slot %d nr_symbols %d, start_symbol %d, prb_start %d, second_hop_prb %d,  group_hop_flag %d, sequence_hop_flag %d, mcs %d\n",
         nr_slot_tx,pucch_pdu->nr_of_symbols,pucch_pdu->start_symbol_index,pucch_pdu->prb_start,pucch_pdu->second_hop_prb,pucch_pdu->group_hop_flag,pucch_pdu->sequence_hop_flag,pucch_pdu->mcs);
-  int pucch0_num_delay = (nr_slot_tx +num_delay)%20;   //add_yjn
+  int pucch0_num_delay = (nr_slot_tx +num_delay)%10;   //add_yjn
 #ifdef DEBUG_NR_PUCCH_TX
   printf("\t [nr_generate_pucch0] sequence generation: variable initialization for test\n");
 #endif
@@ -198,7 +198,7 @@ void nr_generate_pucch1(PHY_VARS_NR_UE *ue,
    *
    */
   // complex-valued symbol d_re, d_im containing complex-valued symbol d(0):
-   int pucch1_dmrs_num_delay = (nr_slot_tx + num_delay)%20;   //add_yjn
+   int pucch1_dmrs_num_delay = (nr_slot_tx + num_delay)%10;   //add_yjn
   int16_t d_re=0, d_im=0;
 
   if (pucch_pdu->n_bit == 1) { // using BPSK if M_bit=1 according to TC 38.211 Subclause 5.1.2
@@ -1055,7 +1055,7 @@ void nr_generate_pucch2(PHY_VARS_NR_UE *ue,
 
   for (int l=0; l<pucch_pdu->nr_of_symbols; l++) {
     // c_init calculation according to TS38.211 subclause
-    int pucch2_dmrs_delay_slot = (nr_slot_tx +  num_delay)%20;//add_yjn
+    int pucch2_dmrs_delay_slot = (nr_slot_tx +  num_delay)%10;//add_yjn
     // x2 = (((1<<17)*((14*nr_slot_tx) + (l+startingSymbolIndex) + 1)*((2*pucch_pdu->dmrs_scrambling_id) + 1)) + (2*pucch_pdu->dmrs_scrambling_id))%(1U<<31); 
     x2 = (((1<<17)*((14*pucch2_dmrs_delay_slot) + (l+startingSymbolIndex) + 1)*((2*pucch_pdu->dmrs_scrambling_id) + 1)) + (2*pucch_pdu->dmrs_scrambling_id))%(1U<<31); //add_yjn
     int reset = 1;
@@ -1144,7 +1144,7 @@ void nr_generate_pucch3_4(PHY_VARS_NR_UE *ue,
 #ifdef DEBUG_NR_PUCCH_TX
   printf("\t [nr_generate_pucch3_4] start function at slot(nr_slot_tx)=%d with payload=%lu and nr_bit=%d\n", nr_slot_tx, pucch_pdu->payload, pucch_pdu->n_bit);
 #endif
-  int pucch3_4_dmrs_num_delay = (nr_slot_tx + num_delay)%20;   //add_yjn
+  int pucch3_4_dmrs_num_delay = (nr_slot_tx + num_delay)%10;   //add_yjn
   // b is the block of bits transmitted on the physical channel after payload coding
   uint64_t b[16];
   // M_bit is the number of bits of block b (payload after encoding)

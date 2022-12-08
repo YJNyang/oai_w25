@@ -148,7 +148,8 @@ void config_uplink_harq_process(PHY_VARS_NR_UE *ue, int gNB_id, int thread_id, i
   }
 
   for (int slot_tx = 0; slot_tx < NR_MAX_SLOTS_PER_FRAME; slot_tx++) {
-    ue->ulsch[thread_id][gNB_id]->harq_process_id[slot_tx] = NR_MAX_HARQ_PROCESSES;
+    // ue->ulsch[thread_id][gNB_id]->harq_process_id[slot_tx] = NR_MAX_HARQ_PROCESSES;
+    ue->ulsch[thread_id][gNB_id]->harq_process_id[slot_tx] = 255;//add_yjn_harq
   }
 }
 

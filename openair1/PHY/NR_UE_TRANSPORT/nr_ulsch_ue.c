@@ -220,7 +220,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     nr_init_pusch_dmrs(UE, pusch_pdu->scid, pusch_pdu->ul_dmrs_scrambling_id);
   }
 
-  uint8_t dmrs_num_delay = (slot + num_delay)%20; //add_yjn  
+  uint8_t dmrs_num_delay = (slot + num_delay)%10; //add_yjn  
   LOG_D(PHY,"dmrs_num_delay = %d\n",dmrs_num_delay);//add_yjn
   uint32_t ***pusch_dmrs = UE->nr_gold_pusch_dmrs[dmrs_num_delay]; //add_yjn
   uint16_t n_dmrs = (pusch_pdu->bwp_start + start_rb + nb_rb)*((dmrs_type == pusch_dmrs_type1) ? 6:4);

@@ -594,7 +594,7 @@ void pf_dl(module_id_t module_id,
     const uint32_t b = UE->mac_stats.dl.current_bytes;
     UE->dl_thr_ue = (1 - a) * UE->dl_thr_ue + a * b;
 
-    LOG_D(NR_MAC,"[yjn]:(pf_dl)sched_pdsch->dl_harq_pid = %d\n",sched_pdsch->dl_harq_pid);//add_yjn_harq
+    LOG_D(NR_MAC,"[yjn]:(pf_dl)sched_pdsch->dl_harq_pid = %d\n",sched_pdsch->dl_harq_pid);//add_yjn_debug_harq
     /* retransmission */
     if (sched_pdsch->dl_harq_pid >= 0) {
       /* Allocate retransmission */
@@ -1391,6 +1391,13 @@ void nr_schedule_ue_spec(module_id_t module_id,
     gNB_mac->TX_req[CC_id].Slot = slot;
     /* mark UE as scheduled */
     sched_pdsch->rbSize = 0;
+
+  harq->is_waiting = false;//add_yjn_harq
+   remove_front_nr_list(&sched_ctrl->feedback_dl_harq);
+   add_tail_nr_list(&sched_ctrl->available_dl_harq, current_harq_pid); 
+  harq->round = 0;
+  harq->ndi ^= 1;
+  LOG_D(NR_MAC,"sched_ctrl->available_dl_harq.head = %d\n",sched_ctrl->available_dl_harq.head);
   }
   }
 }

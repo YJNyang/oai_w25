@@ -403,7 +403,8 @@ int nr_process_mac_pdu( instance_t module_idP,
   return 0;
 }
 
-void abort_nr_ul_harq( NR_UE_info_t* UE, int8_t harq_pid)
+// void abort_nr_ul_harq( NR_UE_info_t* UE, int8_t harq_pid)//add_yjn_harq
+void abort_nr_ul_harq( NR_UE_info_t* UE, int harq_pid)
 {
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   NR_UE_ul_harq_t *harq = &sched_ctrl->ul_harq_processes[harq_pid];
@@ -424,10 +425,8 @@ void handle_nr_ul_harq(const int CC_idP,
                        module_id_t mod_id,
                        frame_t frame,
                        sub_frame_t slot,
-                      //  const nfapi_nr_crc_t *crc_pdu)
-                      nfapi_nr_crc_t *crc_pdu)//add_yjn_harq
+                       const nfapi_nr_crc_t *crc_pdu)  
 {
-  crc_pdu->tb_crc_status = 0;//add_yjn_harq
   NR_UE_info_t* UE = find_nr_UE(&RC.nrmac[mod_id]->UE_info, crc_pdu->rnti);
   if (!UE) {
     LOG_W(NR_MAC, "handle harq for rnti %04x, in RA process\n", crc_pdu->rnti);
@@ -441,7 +440,8 @@ void handle_nr_ul_harq(const int CC_idP,
     return;
   }
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
-  int8_t harq_pid = sched_ctrl->feedback_ul_harq.head;
+  // int8_t harq_pid = sched_ctrl->feedback_ul_harq.head;
+  int harq_pid = sched_ctrl->feedback_ul_harq.head;//add_yjn_harq
   LOG_D(NR_MAC, "Comparing crc_pdu->harq_id vs feedback harq_pid = %d %d\n",crc_pdu->harq_id, harq_pid);
   while (crc_pdu->harq_id != harq_pid || harq_pid < 0) {
     LOG_W(NR_MAC,
@@ -459,7 +459,8 @@ void handle_nr_ul_harq(const int CC_idP,
       abort_nr_ul_harq(UE, harq_pid);
     } else {
       // sched_ctrl->ul_harq_processes[harq_pid].round++;
-      // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);//add_yjn_harq
+      // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
+       abort_nr_ul_harq(UE, harq_pid);//add_yjn_harq
     }
     harq_pid = sched_ctrl->feedback_ul_harq.head;
   }
@@ -488,7 +489,8 @@ void handle_nr_ul_harq(const int CC_idP,
           "Ulharq id %d crc failed for RNTI %04x\n",
           harq_pid,
           crc_pdu->rnti);
-    // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);//add_yjn_harq
+    // add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
+    abort_nr_ul_harq(UE, harq_pid);//add_yjn_harq
   }
 }
 
@@ -518,7 +520,8 @@ void nr_rx_sdu(const module_id_t gnb_mod_idP,
   NR_UE_info_t* UE = find_nr_UE(&gNB_mac->UE_info, current_rnti);
   if (UE) {
     NR_UE_sched_ctrl_t *UE_scheduling_control = &UE->UE_sched_ctrl;
-    const int8_t harq_pid = UE_scheduling_control->feedback_ul_harq.head;
+    // const int8_t harq_pid = UE_scheduling_control->feedback_ul_harq.head;
+    const int harq_pid = UE_scheduling_control->feedback_ul_harq.head;//add_yjn_harq
 
     if (sduP)
       T(T_GNB_MAC_UL_PDU_WITH_DATA, T_INT(gnb_mod_idP), T_INT(CC_idP),
@@ -1556,7 +1559,8 @@ void nr_schedule_ulsch(module_id_t module_id, frame_t frame, sub_frame_t slot)
     uint16_t rnti = UE->rnti;
     sched_ctrl->SR = false;
 
-    int8_t harq_id = sched_pusch->ul_harq_pid;
+    // int8_t harq_id = sched_pusch->ul_harq_pid;
+    int harq_id = sched_pusch->ul_harq_pid;//add_yjn_harq
     if (harq_id < 0) {
       /* PP has not selected a specific HARQ Process, get a new one */
       harq_id = sched_ctrl->available_ul_harq.head;

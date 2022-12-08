@@ -72,12 +72,13 @@ int get_last_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slot)
   // int extend_slot[] = {20, 60 , 140, 300}; //add_yjn  for scs 30kHz, extend slot(only 30kHz)
   NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
   const int nb_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
-  int num_slots = 40;
-  if (num_delay <= 20)  num_slots = nb_slots + 20;     //  if 30khz, 40 slot
-  else if (num_delay<=60) num_slots = nb_slots + 60;     //  if 30khz, 80 slot
-  else if (num_delay<=140) num_slots = nb_slots + 140;     //  if 30khz, 160 slot
-  else if (num_delay<=300) num_slots = nb_slots + 300;     //  if 30khz, 320 slot
-  else  LOG_E(NR_MAC,"RTT-slot only support <= 300\n");
+  int num_slots = 20;
+  if (num_delay <= 10)  num_slots = nb_slots + 10;     //  if 30khz, 40 slot
+  else if (num_delay<=30) num_slots = nb_slots + 30;     //  if 30khz, 80 slot
+  else if (num_delay<=70) num_slots = nb_slots + 70;     //  if 30khz, 160 slot
+  else if (num_delay<=150) num_slots = nb_slots + 150;     //  if 30khz, 320 slot
+  else if (num_delay<=310) num_slots = nb_slots + 310;     //  if 30khz, 320 slot
+  else  LOG_E(NR_MAC,"RTT-slot only support <= 310\n");
 
   int frame_group = num_slots / nb_slots;
   int index = 0;
@@ -94,12 +95,13 @@ int get_future_ul_tti_req_ind(gNB_MAC_INST * gNB, frame_t frame, sub_frame_t slo
   // int extend_slot[] = {20, 40, 60 , 80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300}; //add_yjn  for scs 30kHz, extend slot(only 30kHz)
   NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
   const int nb_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
-  int num_slots = 40;
-  if (num_delay <= 20)  num_slots = nb_slots + 20;     //  if 30khz, 40 slot
-  else if (num_delay<=60) num_slots = nb_slots + 60;     //  if 30khz, 80 slot
-  else if (num_delay<=140) num_slots = nb_slots + 140;     //  if 30khz, 160 slot
-  else if (num_delay<=300) num_slots = nb_slots + 300;     //  if 30khz, 320 slot
-  else  LOG_E(NR_MAC,"RTT-slot only support <= 300\n");
+  int num_slots = 20;
+  if (num_delay <= 10)  num_slots = nb_slots + 10;     //  if 30khz, 40 slot
+  else if (num_delay<=30) num_slots = nb_slots + 30;     //  if 30khz, 80 slot
+  else if (num_delay<=70) num_slots = nb_slots + 70;     //  if 30khz, 160 slot
+  else if (num_delay<=150) num_slots = nb_slots + 150;     //  if 30khz, 320 slot
+  else if (num_delay<=310) num_slots = nb_slots + 310;     //  if 30khz, 320 slot
+  else  LOG_E(NR_MAC,"RTT-slot only support <= 310\n");
 
   int frame_group = num_slots / nb_slots;
   int  index = (frame % frame_group) * nb_slots + slot;
@@ -114,12 +116,13 @@ void clear_nr_nfapi_information(gNB_MAC_INST * gNB,
   //add_yjn
   NR_ServingCellConfigCommon_t *scc = gNB->common_channels->ServingCellConfigCommon;
   const int nb_slots = nr_slots_per_frame[*scc->ssbSubcarrierSpacing];
-  int num_slots = 0;
-  if (num_delay <= 20)  num_slots = nb_slots + 20;     //  if 30khz, 40 slot
-  else if (num_delay<=60) num_slots = nb_slots + 60;     //  if 30khz, 80 slot
-  else if (num_delay<=140) num_slots = nb_slots + 140;     //  if 30khz, 160 slot
-  else if (num_delay<=300) num_slots = nb_slots + 300;     //  if 30khz, 320 slot
-  else  LOG_E(NR_MAC,"RTT-slot only support <= 300\n");
+  int num_slots = 20;
+  if (num_delay <= 10)  num_slots = nb_slots + 10;     //  if 30khz, 40 slot
+  else if (num_delay<=30) num_slots = nb_slots + 30;     //  if 30khz, 80 slot
+  else if (num_delay<=70) num_slots = nb_slots + 70;     //  if 30khz, 160 slot
+  else if (num_delay<=150) num_slots = nb_slots + 150;     //  if 30khz, 320 slot
+  else if (num_delay<=310) num_slots = nb_slots + 310;     //  if 30khz, 320 slot
+  else  LOG_E(NR_MAC,"RTT-slot only support <= 310\n");
   LOG_D(NR_MAC,"[yjn] clear_nr_nfapi_information && UL_tti_req_ahead_initialization\n");
   UL_tti_req_ahead_initialization(gNB, scc, num_slots, CC_idP);
 
