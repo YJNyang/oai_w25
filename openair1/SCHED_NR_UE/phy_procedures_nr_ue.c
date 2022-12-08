@@ -1911,7 +1911,8 @@ void UE_TrackSync_thread(void*arg)
 {
   nr_rxtx_thread_data_t *syncD=(nr_rxtx_thread_data_t *) arg;
   PHY_VARS_NR_UE *UE = syncD->UE;
-  int WinLen = (UE->SYNC_mode[0]==WAIT_SYNC)?UE->frame_parms.ofdm_symbol_size<<1 : UE->max_delay_offset <<5;
+  // int WinLen = (UE->SYNC_mode[0]==WAIT_SYNC)?UE->frame_parms.ofdm_symbol_size<<1 : UE->max_delay_offset <<5;
+  int WinLen = UE->frame_parms.ofdm_symbol_size >> 1;
   int TrackPosition = UE->sync_pos_frame+UE->frame_parms.nb_prefix_samples; // sync pss position
   int  sync_offset;
   static int count_max_pos_ok = 0;
@@ -1973,7 +1974,7 @@ void UE_TrackSync_thread(void*arg)
     }else{
           AssertFatal(0,"Unexpected SYNC_mode\n");
     }
-    
+
     //------------------------------------------ CFO compensate sequence calcu ------------------------------------------//
     if(UE->UE_fo_compensation){
             double s_time = 1/(1.0e3*UE->frame_parms.samples_per_subframe);  // sampling time
@@ -1983,7 +1984,7 @@ void UE_TrackSync_thread(void*arg)
                 UE->common_vars.cfo_compen_sin[n] = sin(n*off_angle);
                 UE->common_vars.cfo_compen_cos[n] = cos(n*off_angle);
             }
-    }  
+    }   
   }else{ // TRACK SYNC FAILED
     UE->SYNC_mode[0] = INIT_SYNC;
     track_first_time = 1;

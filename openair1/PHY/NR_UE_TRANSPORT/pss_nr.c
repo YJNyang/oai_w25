@@ -1170,28 +1170,28 @@ int pss_search_time_track_nr(int **rxdata, ///rx data in time domain
 
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> CP FFO EST <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<//
 
-    double ffo_cp=0;
-    int64_t ffo_cp_corr = 0;
-    int64_t ffo_cp_est = 0;
-    int offsetUnit = frame_parms->nb_prefix_samples + frame_parms->ofdm_symbol_size;
-    int PosStart = peak_position - frame_parms->nb_prefix_samples;  
-    int cp_corr_shift = frame_parms->ffo_corr_shift >0 ? frame_parms->ffo_corr_shift : pss_corr_shift;
-        for (int i = 0; i < 4; i++){
-            ffo_cp_corr = dot_product64((short*)&(rxdata[0][PosStart+i*offsetUnit]), 
-                                      (short*)&(rxdata[0][PosStart+i*offsetUnit+frame_parms->ofdm_symbol_size]), // 修改：调用前完成数据截取
-                                      frame_parms->nb_prefix_samples,
-                                      cp_corr_shift);
-          ((int32_t*) &ffo_cp_est)[0] = ((int32_t*) &ffo_cp_est)[0]+((int32_t*) &ffo_cp_corr)[0];
-          ((int32_t*) &ffo_cp_est)[1] = ((int32_t*) &ffo_cp_est)[1]+((int32_t*) &ffo_cp_corr)[1];
-        }
-        int32_t re3,im3;
-        re3=((int32_t*) &ffo_cp_est)[0];
-        im3=((int32_t*) &ffo_cp_est)[1];
-        ffo_cp=-atan2(im3,re3)/2/M_PI; // ffo=-angle()/2/pi
+    // double ffo_cp=0;
+    // int64_t ffo_cp_corr = 0;
+    // int64_t ffo_cp_est = 0;
+    // int offsetUnit = frame_parms->nb_prefix_samples + frame_parms->ofdm_symbol_size;
+    // int PosStart = peak_position - frame_parms->nb_prefix_samples;  
+    // int cp_corr_shift = frame_parms->ffo_corr_shift >0 ? frame_parms->ffo_corr_shift : pss_corr_shift;
+    //     for (int i = 0; i < 2; i++){
+    //         ffo_cp_corr = dot_product64((short*)&(rxdata[0][PosStart+i*offsetUnit]), 
+    //                                   (short*)&(rxdata[0][PosStart+i*offsetUnit+frame_parms->ofdm_symbol_size]), // 修改：调用前完成数据截取
+    //                                   frame_parms->nb_prefix_samples,
+    //                                   cp_corr_shift);
+    //       ((int32_t*) &ffo_cp_est)[0] = ((int32_t*) &ffo_cp_est)[0]+((int32_t*) &ffo_cp_corr)[0];
+    //       ((int32_t*) &ffo_cp_est)[1] = ((int32_t*) &ffo_cp_est)[1]+((int32_t*) &ffo_cp_corr)[1];
+    //     }
+    //     int32_t re3,im3;
+    //     re3=((int32_t*) &ffo_cp_est)[0];
+    //     im3=((int32_t*) &ffo_cp_est)[1];
+    //     ffo_cp=-atan2(im3,re3)/2/M_PI; // ffo=-angle()/2/pi
 
   // ===========================================  输出量计算   =========================================== 
     *f_off += ffo_pss*frame_parms->subcarrier_spacing;  
-    LOG_I(PHY,"[TRC SYNC] SNR=%d, sync_pos=%d, ffo_cp=%f, cfo_track=%d \n",trackSNR,peak_position,ffo_pss*frame_parms->subcarrier_spacing,*f_off);
+    LOG_I(PHY,"[TRC SYNC] SNR=%d, sync_pos=%d(%d), ffo_cp=%f, cfo_track=%d \n",trackSNR,peak_position,length,ffo_pss*frame_parms->subcarrier_spacing,*f_off);
     return(peak_position);
 }
 
